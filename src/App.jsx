@@ -7,71 +7,55 @@ import {
   Building2, Globe2, Network, Lightbulb, Crosshair, Info, Edit3
 } from 'lucide-react';
 
-// --- TYPES ---
-interface PostData {
-  micro: string;
-  short: string;
-  medium: string;
-  long: string;
-  image: string | null;
-  description: string;
-}
-
-interface ColumboData {
-  question: string;
-  options: string[];
-}
-
-interface Asset extends PostData {
-  id: number;
-  name: string;
-  topic: string;
-  scheduledDate: string;
-  persona: string;
-  companySize: string;
-  tone: string;
-  lang: string;
-  date: string;
-}
-
 export default function App() {
   // --- CORE STATE ---
-  const [activeStep, setActiveStep] = useState<string>('input'); 
-  const [language, setLanguage] = useState<string>('DE');
+  const [activeStep, setActiveStep] = useState('input'); 
+  const [language, setLanguage] = useState('DE');
   
   // Konfiguration
-  const [companySize, setCompanySize] = useState<string>('Mittelstand');
-  const [persona, setPersona] = useState<string>('Geschäftsführung');
-  const [tone, setTone] = useState<string>('Analytisch');
-  const [input, setInput] = useState<string>(''); 
+  const [companySize, setCompanySize] = useState('Mittelstand');
+  const [persona, setPersona] = useState('Geschäftsführung');
+  const [tone, setTone] = useState('Analytisch');
+  const [input, setInput] = useState(''); 
   
   // --- API KEY ---
   // HIER DEINEN SCHLÜSSEL EINTRAGEN BEVOR DU ES AUF VERCEL PUSHST!
   const apiKey = ""; 
 
   // --- CONTENT STATE ---
-  const [columboData, setColumboData] = useState<ColumboData>({ question: '', options: [] });
-  const [customAnswer, setCustomAnswer] = useState<string>('');
-  const [selectedAnswer, setSelectedAnswer] = useState<string>('');
-  const [posts, setPosts] = useState<PostData>({ micro: '', short: '', medium: '', long: '', image: null, description: '' });
-  const [scheduleDate, setScheduleDate] = useState<string>('');
+  const [columboData, setColumboData] = useState({ question: '', options: [] });
+  const [customAnswer, setCustomAnswer] = useState('');
+  const [selectedAnswer, setSelectedAnswer] = useState('');
+  const [posts, setPosts] = useState({ micro: '', short: '', medium: '', long: '', image: null, description: '' });
+  const [scheduleDate, setScheduleDate] = useState('');
   
   // --- UI STATE ---
-  const [progress, setProgress] = useState<number>(0);
-  const [progressLabel, setProgressLabel] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
+  const [progress, setProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState('');
+  const [loading, setLoading] = useState(false);
   const [loadingItems, setLoadingItems] = useState({ micro: false, short: false, medium: false, long: false, image: false });
-  const [error, setError] = useState<string | null>(null);
-  const [assetLibrary, setAssetLibrary] = useState<Asset[]>([]);
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
-  const [copiedType, setCopiedType] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [error, setError] = useState(null);
+  const [assetLibrary, setAssetLibrary] = useState([]);
+  const [zoomedImage, setZoomedImage] = useState(null);
+  const [copiedType, setCopiedType] = useState(null);
+  const [editingId, setEditingId] = useState(null);
 
   const pixelBarUrl = "https://images.unsplash.com/photo-1514933651103-005eec06c04b?q=80&w=1000&auto=format&fit=crop"; 
 
+  // --- TAILWIND FIX (THE REAL ONE) ---
+  // Lädt Tailwind direkt in die App, falls die index.html kaputt ist.
+  useEffect(() => {
+    if (!document.getElementById('tailwind-script')) {
+      const script = document.createElement('script');
+      script.id = 'tailwind-script';
+      script.src = "https://cdn.tailwindcss.com";
+      document.head.appendChild(script);
+    }
+  }, []);
+
   // --- PROGRESS ANIMATION ---
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
+    let interval;
     if (loading && progress < 98) {
       interval = setInterval(() => {
         setProgress((prev) => {
@@ -81,11 +65,11 @@ export default function App() {
         });
       }, 300);
     }
-    return () => clearInterval(interval!);
+    return () => clearInterval(interval);
   }, [loading, progress]);
 
   // --- API SERVICE ---
-  const apiCall = async (url: string, payload: any): Promise<any> => {
+  const apiCall = async (url, payload) => {
     const retries = 5;
     const delays = [1000, 2000, 4000, 8000, 16000];
     
@@ -110,7 +94,7 @@ export default function App() {
     }
   };
 
-  const parseJSON = (text: string): any => {
+  const parseJSON = (text) => {
     try {
       const match = text.match(/\{[\s\S]*\}/);
       const jsonStr = match ? match[0] : text;
@@ -121,7 +105,7 @@ export default function App() {
   };
 
   // --- DER TÜRSTEHER ---
-  const checkRelevance = async (text: string): Promise<boolean> => {
+  const checkRelevance = async (text) => {
     try {
       const res = await apiCall(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
         contents: [{ parts: [{ text: `Analysiere den folgenden Text streng auf Business/IT/Marketing Relevanz: "${text}". Antworte AUSSCHLIESSLICH mit "OK", wenn es ein seriöses Thema ist, oder "QUATSCH", wenn es Unsinn, Spam oder völlig themenfremd ist.` }] }]
@@ -137,7 +121,7 @@ export default function App() {
   const startInvestigation = async () => {
     if (!input.trim()) return;
     if (!apiKey) {
-      setError("API-Schlüssel fehlt! Trage ihn in Zeile 42 im Code ein.");
+      setError("API-Schlüssel fehlt in der App.jsx! Trage ihn oben im Code ein.");
       return;
     }
 
@@ -163,9 +147,9 @@ export default function App() {
       });
       
       const parsed = parseJSON(result.candidates[0].content.parts[0].text);
-      let safeOptions: string[] = [];
+      let safeOptions = [];
       if (parsed && Array.isArray(parsed.options)) {
-          safeOptions = parsed.options.filter((o: string) => o && o.length > 2 && !['A', 'B'].includes(o));
+          safeOptions = parsed.options.filter((o) => o && o.length > 2 && !['A', 'B'].includes(o));
       }
 
       setColumboData({
@@ -174,7 +158,7 @@ export default function App() {
       });
       setCustomAnswer('');
       setActiveStep('columbo');
-    } catch (err: any) { 
+    } catch (err) { 
       setError(err.message || "Ein Fehler ist bei der Initialisierung aufgetreten."); 
     } finally { 
       setLoading(false); 
@@ -182,7 +166,7 @@ export default function App() {
     }
   };
 
-  const runContentEngine = async (type: string, answer: string = '') => {
+  const runContentEngine = async (type, answer = '') => {
     const finalAnswer = answer || customAnswer;
     if (type === 'all') { 
       setActiveStep('generating'); 
@@ -232,7 +216,7 @@ export default function App() {
         }
       }
       setActiveStep('result');
-    } catch (err: any) { 
+    } catch (err) { 
       setError("Engine Fehler: " + err.message); 
       if(type === 'all') setActiveStep('columbo');
     } finally { 
@@ -250,7 +234,7 @@ export default function App() {
       });
       const name = nameRes.candidates[0].content.parts[0].text.trim().replace(/[^a-zA-Z0-9\säöüßÄÖÜ]/g, "").replace(/\s+/g, "_");
       
-      const newAsset: Asset = { 
+      const newAsset = { 
           id: Date.now(), 
           name: name || "Alpha_Campaign", 
           ...posts, 
@@ -269,12 +253,12 @@ export default function App() {
     finally { setLoading(false); }
   };
 
-  const updateAsset = (id: number, newName: string) => {
+  const updateAsset = (id, newName) => {
     setAssetLibrary(assetLibrary.map(a => a.id === id ? {...a, name: newName} : a));
     setEditingId(null);
   };
 
-  const loadFromArchive = (item: Asset) => {
+  const loadFromArchive = (item) => {
     setPosts(item);
     setInput(item.topic);
     setPersona(item.persona);
@@ -285,7 +269,7 @@ export default function App() {
   };
 
   // --- UI KOMPONENTEN ---
-  const HorizontalButton = ({ active, onClick, icon: Icon, label }: { active: boolean, onClick: () => void, icon: any, label: string }) => (
+  const HorizontalButton = ({ active, onClick, icon: Icon, label }) => (
     <button 
         onClick={onClick}
         className={`flex-1 flex items-center justify-center gap-2 py-4 px-3 rounded-2xl border-2 transition-all duration-300 ${active ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] scale-105 z-10' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600 hover:bg-slate-800'}`}
@@ -295,7 +279,7 @@ export default function App() {
     </button>
   );
 
-  const ContentCard = ({ title, text, type, icon: Icon, color, charCount }: any) => (
+  const ContentCard = ({ title, text, type, icon: Icon, color, charCount }) => (
     <div className="bg-[#0F172A] border border-slate-800 rounded-[2.5rem] p-8 relative flex flex-col h-full shadow-2xl transition-all hover:border-blue-500/40 group">
       <div className={`absolute top-0 left-0 w-2 h-full ${color} rounded-l-[2.5rem]`}></div>
       <div className="flex justify-between items-center mb-6 pl-4">
@@ -305,7 +289,7 @@ export default function App() {
         </button>
       </div>
       <div className="bg-black/50 p-8 rounded-3xl border border-slate-800 flex-1 overflow-hidden relative ml-4">
-        {loadingItems[type as keyof typeof loadingItems] && <div className="absolute inset-0 bg-[#0F172A]/90 flex items-center justify-center z-10"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}
+        {loadingItems[type] && <div className="absolute inset-0 bg-[#0F172A]/90 flex items-center justify-center z-10"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}
         <p className={`text-slate-200 leading-relaxed whitespace-pre-wrap ${type === 'micro' ? 'font-bold text-xl italic text-blue-100' : 'text-sm font-medium'}`}>{text || "Warte auf Engine..."}</p>
         {charCount && <div className={`mt-6 text-[10px] font-black text-right uppercase tracking-widest ${text.length > 200 ? 'text-red-500' : 'text-slate-600'}`}>{text.length} / 200 CHR</div>}
       </div>
@@ -329,7 +313,7 @@ export default function App() {
           {activeStep !== 'input' && <button onClick={() => setActiveStep('input')} className="p-3 bg-slate-800 rounded-full text-blue-400 hover:bg-slate-700 active:scale-95 transition-all"><RotateCcw size={20}/></button>}
           <div className="flex flex-col">
             <h1 className="text-sm font-black uppercase tracking-[0.4em] text-white italic">ELWIS LAB</h1>
-            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v29.0 | THE EXECUTIVE MASTER</span>
+            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v30.0 | JAVASCRIPT MASTER</span>
           </div>
         </div>
         <button onClick={() => setActiveStep('library')} className="p-4 bg-slate-800 rounded-2xl border border-slate-700 relative hover:bg-slate-700 transition-all">
@@ -531,8 +515,8 @@ export default function App() {
                                         
                                         {editingId === item.id ? (
                                             <div className="flex items-center gap-4 w-full max-w-md">
-                                                <input type="text" className="bg-slate-900 text-white px-6 py-3 rounded-2xl w-full outline-none font-bold text-lg border-2 border-blue-500" defaultValue={item.name} onBlur={(e) => updateAsset(item.id, e.target.value)} onKeyDown={(e) => e.key === 'Enter' && updateAsset(item.id, e.currentTarget.value)} autoFocus />
-                                                <CheckCircle2 size={32} className="text-green-500 cursor-pointer" onClick={(e) => { const input = e.currentTarget.previousSibling as HTMLInputElement; updateAsset(item.id, input.value); }} />
+                                                <input type="text" className="bg-slate-900 text-white px-6 py-3 rounded-2xl w-full outline-none font-bold text-lg border-2 border-blue-500" defaultValue={item.name} onBlur={(e) => updateAsset(item.id, e.target.value)} onKeyDown={(e) => e.key === 'Enter' && updateAsset(item.id, e.target.value)} autoFocus />
+                                                <CheckCircle2 size={32} className="text-green-500 cursor-pointer" onClick={(e) => { const input = e.currentTarget.previousSibling; updateAsset(item.id, input.value); }} />
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-4 flex-1 overflow-hidden w-full">
