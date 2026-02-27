@@ -16,7 +16,7 @@ export default function App() {
   const [tone, setTone] = useState('Analytisch');
   const [input, setInput] = useState(''); 
   
-  
+  // DEIN API-SCHLÜSSEL - FEST VERANKERT. Nicht mehr anfassen.
   const apiKey = "AIzaSyBqfwA5lTbTMssaZmbVneKanhskuVC0TpY"; 
 
   const [columboData, setColumboData] = useState({ question: '', options: [] });
@@ -37,17 +37,20 @@ export default function App() {
 
   const pixelBarUrl = "https://images.unsplash.com/photo-1514933651103-005eec06c04b?q=80&w=1000&auto=format&fit=crop"; 
 
-  // Lädt das Design (Tailwind) absolut sicher nach
+  // AGGRESSIVER TAILWIND INJECTOR (Garantiert, dass Vercel das blaue Design lädt)
   useEffect(() => {
-    if (!document.getElementById('tailwind-script')) {
-      const script = document.createElement('script');
-      script.id = 'tailwind-script';
-      script.src = "https://cdn.tailwindcss.com";
-      document.head.appendChild(script);
-    }
+    const loadTailwind = () => {
+      if (!document.getElementById('tailwind-cdn-force')) {
+        const script = document.createElement('script');
+        script.id = 'tailwind-cdn-force';
+        script.src = "https://cdn.tailwindcss.com";
+        document.head.appendChild(script);
+      }
+    };
+    loadTailwind();
   }, []);
 
-  // Ladebalken-Animation
+  // Ladebalken
   useEffect(() => {
     let interval;
     if (loading && progress < 98) {
@@ -62,10 +65,11 @@ export default function App() {
     return () => clearInterval(interval);
   }, [loading, progress]);
 
-  // Robuster API Call mit Wiederholungen
+  // API Call mit Backoff (Verhindert Abstürze)
   const apiCall = async (url, payload) => {
     const retries = 5;
     const delays = [1000, 2000, 4000, 8000, 16000];
+    
     for (let i = 0; i < retries; i++) {
       try {
         const response = await fetch(url, { 
@@ -73,10 +77,13 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' }, 
           body: JSON.stringify(payload) 
         });
+        
         if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
         return await response.json();
       } catch (err) {
-        if (i === retries - 1) throw new Error("KI-Distrikt meldet Funkstille. Verbindung fehlgeschlagen.");
+        if (i === retries - 1) {
+            throw new Error("KI-Distrikt meldet Funkstille. Die Verbindung konnte nicht hergestellt werden.");
+        }
         await new Promise(resolve => setTimeout(resolve, delays[i]));
       }
     }
@@ -92,7 +99,7 @@ export default function App() {
     }
   };
 
-  // Türsteher für Unsinn
+  // Türsteher
   const checkRelevance = async (text) => {
     try {
       const res = await apiCall(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
@@ -106,7 +113,7 @@ export default function App() {
   const startInvestigation = async () => {
     if (!input.trim()) return;
     if (!apiKey) {
-      setError("API-Schlüssel fehlt! Trage ihn in Zeile 16 im Code ein.");
+      setError("API-Schlüssel fehlt!");
       return;
     }
 
@@ -156,7 +163,7 @@ export default function App() {
     if (type === 'all') { 
       setActiveStep('generating'); 
       setProgress(10); 
-      setProgressLabel(`Synthetisiere Engine-Architektur für ${persona}...`); 
+      setProgressLabel(`Synthetisiere Architektur für ${persona}...`); 
     }
     setLoadingItems(prev => ({ ...prev, [type]: true, ...(type === 'all' && { micro: true, short: true, medium: true, long: true, image: true }) }));
     setLoading(true);
@@ -196,7 +203,7 @@ export default function App() {
         const imgRes = await apiCall(`https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`, {
           instances: [{ prompt: `Ultra-premium corporate business infographic for ${persona} in ${companySize}, concept: ${posts.description || 'data flow architecture'}, royal blue and dark slate theme, modern clean minimalist vector art, 8k resolution, crisp white background.` }]
         });
-        if (imgRes.predictions?.[0]) {
+        if (imgRes.predictions && imgRes.predictions[0]) {
           setPosts(prev => ({ ...prev, image: `data:image/png;base64,${imgRes.predictions[0].bytesBase64Encoded}` }));
         }
       }
@@ -253,7 +260,6 @@ export default function App() {
     setActiveStep('result');
   };
 
-  // Hilfskomponenten
   const HorizontalButton = ({ active, onClick, icon: Icon, label }) => (
     <button 
         onClick={onClick}
@@ -296,7 +302,7 @@ export default function App() {
           {activeStep !== 'input' && <button onClick={() => setActiveStep('input')} className="p-3 bg-slate-800 rounded-full text-blue-400 hover:bg-slate-700 active:scale-95 transition-all"><RotateCcw size={20}/></button>}
           <div className="flex flex-col">
             <h1 className="text-sm font-black uppercase tracking-[0.4em] text-white italic">ELWIS LAB</h1>
-            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v31.0 | PURE JAVASCRIPT</span>
+            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v32.0 | NUKE EDITION</span>
           </div>
         </div>
         <button onClick={() => setActiveStep('library')} className="p-4 bg-slate-800 rounded-2xl border border-slate-700 relative hover:bg-slate-700 transition-all">
