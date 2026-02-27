@@ -4,7 +4,7 @@ import {
   RotateCcw, Image as ImageIcon, X, CheckCircle2, Maximize2, 
   AlignCenter, AlignJustify, AlignLeft, ShieldCheck, Rocket, CalendarDays, 
   Clock, MessageCircle, Target, Briefcase, ShieldAlert, Library, Save, Trash2, ChevronRight,
-  Building2, Globe2, Network, Lightbulb, Crosshair, Info
+  Building2, Globe2, Network, Lightbulb, Crosshair, Info, Edit3
 } from 'lucide-react';
 
 // --- TYPES ---
@@ -39,13 +39,14 @@ export default function App() {
   const [activeStep, setActiveStep] = useState<string>('input'); 
   const [language, setLanguage] = useState<string>('DE');
   
-  // Konfiguration (Horizontal, Ohne Startup)
+  // Konfiguration
   const [companySize, setCompanySize] = useState<string>('Mittelstand');
   const [persona, setPersona] = useState<string>('Geschäftsführung');
   const [tone, setTone] = useState<string>('Analytisch');
   const [input, setInput] = useState<string>(''); 
   
-  // --- API KEY (Von der Umgebung bereitgestellt) ---
+  // --- API KEY ---
+  // HIER DEINEN SCHLÜSSEL EINTRAGEN BEVOR DU ES AUF VERCEL PUSHST!
   const apiKey = ""; 
 
   // --- CONTENT STATE ---
@@ -83,7 +84,7 @@ export default function App() {
     return () => clearInterval(interval!);
   }, [loading, progress]);
 
-  // --- ROBUST API SERVICE (Exponential Backoff) ---
+  // --- API SERVICE ---
   const apiCall = async (url: string, payload: any): Promise<any> => {
     const retries = 5;
     const delays = [1000, 2000, 4000, 8000, 16000];
@@ -135,6 +136,11 @@ export default function App() {
   // --- AKTIONEN ---
   const startInvestigation = async () => {
     if (!input.trim()) return;
+    if (!apiKey) {
+      setError("API-Schlüssel fehlt! Trage ihn in Zeile 42 im Code ein.");
+      return;
+    }
+
     setLoading(true);
     setProgress(5);
     setProgressLabel("Analysiere Zielvorgabe...");
@@ -157,7 +163,7 @@ export default function App() {
       });
       
       const parsed = parseJSON(result.candidates[0].content.parts[0].text);
-      let safeOptions = [];
+      let safeOptions: string[] = [];
       if (parsed && Array.isArray(parsed.options)) {
           safeOptions = parsed.options.filter((o: string) => o && o.length > 2 && !['A', 'B'].includes(o));
       }
@@ -282,7 +288,7 @@ export default function App() {
   const HorizontalButton = ({ active, onClick, icon: Icon, label }: { active: boolean, onClick: () => void, icon: any, label: string }) => (
     <button 
         onClick={onClick}
-        className={`flex-1 flex items-center justify-center gap-2 py-4 px-3 rounded-2xl border-2 transition-all duration-300 ${active ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] scale-105' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600 hover:bg-slate-800'}`}
+        className={`flex-1 flex items-center justify-center gap-2 py-4 px-3 rounded-2xl border-2 transition-all duration-300 ${active ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] scale-105 z-10' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600 hover:bg-slate-800'}`}
     >
         <Icon size={16} className={active ? 'text-white' : 'text-slate-500'} />
         <span className="font-bold text-[11px] uppercase tracking-widest truncate">{label}</span>
@@ -323,7 +329,7 @@ export default function App() {
           {activeStep !== 'input' && <button onClick={() => setActiveStep('input')} className="p-3 bg-slate-800 rounded-full text-blue-400 hover:bg-slate-700 active:scale-95 transition-all"><RotateCcw size={20}/></button>}
           <div className="flex flex-col">
             <h1 className="text-sm font-black uppercase tracking-[0.4em] text-white italic">ELWIS LAB</h1>
-            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v27.0 | THE EXECUTIVE MASTER</span>
+            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v29.0 | THE EXECUTIVE MASTER</span>
           </div>
         </div>
         <button onClick={() => setActiveStep('library')} className="p-4 bg-slate-800 rounded-2xl border border-slate-700 relative hover:bg-slate-700 transition-all">
@@ -374,20 +380,20 @@ export default function App() {
                 </div>
 
                 {/* THE BLACK BOX INPUT */}
-                <div className="space-y-5 pt-10 border-t border-slate-800 relative">
+                <div className="space-y-5 pt-10 border-t border-slate-800 relative z-0">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2 px-2">
                         <h3 className="text-[12px] font-black uppercase tracking-[0.4em] text-slate-400 italic">Strategic Input</h3>
                         <div className="flex items-center gap-3 text-[10px] font-bold text-blue-300 bg-blue-900/30 px-5 py-2 rounded-full border border-blue-500/20"><Info size={14}/> Mehr Text = Präzisere KI-Analyse.</div>
                     </div>
                     <textarea 
-                        className="w-full h-56 p-10 bg-black border-2 border-slate-800 rounded-[3rem] outline-none text-2xl font-bold text-white placeholder:text-slate-700 focus:border-blue-600 transition-all shadow-inner focus:shadow-[0_0_50px_rgba(37,99,235,0.15)] leading-relaxed resize-none" 
+                        className="w-full h-56 p-10 bg-black border-2 border-slate-800 rounded-[3rem] outline-none text-2xl font-bold text-white placeholder:text-slate-700 focus:border-blue-600 transition-all shadow-inner focus:shadow-[0_0_50px_rgba(37,99,235,0.15)] leading-relaxed resize-none relative z-10" 
                         placeholder="Z.B. Warum traditionelle CRMs im Mittelstand bei 100+ Mitarbeitern versagen..." 
                         value={input} 
                         onChange={(e) => setInput(e.target.value)} 
                     />
                 </div>
 
-                <button onClick={startInvestigation} disabled={loading || !input.trim()} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-10 rounded-[3.5rem] font-black text-sm uppercase tracking-[0.6em] shadow-[0_20px_50px_-10px_rgba(37,99,235,0.5)] flex items-center justify-center gap-6 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none">
+                <button onClick={startInvestigation} disabled={loading || !input.trim()} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-10 rounded-[3.5rem] font-black text-sm uppercase tracking-[0.6em] shadow-[0_20px_50px_-10px_rgba(37,99,235,0.5)] flex items-center justify-center gap-6 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none relative z-20">
                   {loading ? <Loader2 className="animate-spin" size={28} /> : <Sparkles size={28} />} INITIATE ENGINE
                 </button>
             </div>
@@ -421,8 +427,8 @@ export default function App() {
                         ))}
                         <div className="space-y-6 mt-12 pt-12 border-t border-slate-800 text-left">
                             <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 ml-4 mb-2 block">Eigener strategischer Kontext</label>
-                            <textarea className="w-full p-10 bg-black border-2 border-slate-800 rounded-[3rem] font-bold outline-none text-white focus:border-blue-600 h-40 text-xl shadow-inner focus:shadow-[0_0_30px_rgba(37,99,235,0.1)] resize-none" placeholder="Details hinzufügen..." value={customAnswer} onChange={(e) => setCustomAnswer(e.target.value)} />
-                            <button onClick={() => runContentEngine('all', customAnswer)} disabled={loading || !customAnswer.trim()} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-10 rounded-[3.5rem] font-black uppercase text-sm flex items-center justify-center gap-6 hover:scale-[1.02] shadow-[0_20px_40px_-10px_rgba(37,99,235,0.4)] transition-all tracking-[0.4em] disabled:opacity-30 disabled:scale-100">
+                            <textarea className="w-full p-10 bg-black border-2 border-slate-800 rounded-[3rem] font-bold outline-none text-white focus:border-blue-600 h-40 text-xl shadow-inner focus:shadow-[0_0_30px_rgba(37,99,235,0.1)] resize-none relative z-10" placeholder="Details hinzufügen..." value={customAnswer} onChange={(e) => setCustomAnswer(e.target.value)} />
+                            <button onClick={() => runContentEngine('all', customAnswer)} disabled={loading || !customAnswer.trim()} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-10 rounded-[3.5rem] font-black uppercase text-sm flex items-center justify-center gap-6 hover:scale-[1.02] shadow-[0_20px_40px_-10px_rgba(37,99,235,0.4)] transition-all tracking-[0.4em] disabled:opacity-30 disabled:scale-100 relative z-20">
                                 {loading ? <Loader2 className="animate-spin" size={28}/> : <Send size={28}/>} BEWEIS ABSENDEN
                             </button>
                         </div>
@@ -481,7 +487,7 @@ export default function App() {
                 
                 <div className="aspect-square bg-black rounded-[3.5rem] border-[12px] border-slate-900 overflow-hidden flex items-center justify-center relative group cursor-zoom-in mb-8 shadow-inner" onClick={() => posts.image && setZoomedImage(posts.image)}>
                     {loadingItems.image && <div className="absolute inset-0 bg-[#0F172A]/90 flex items-center justify-center z-20"><Loader2 className="animate-spin text-blue-500" size={64} /></div>}
-                    {posts.image ? <img src={posts.image} alt="Visual" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" /> : <Loader2 className="animate-spin text-slate-700" size={48} />}
+                    {posts.image ? <img src={posts.image} alt="Visual" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" /> : <Loader2 className="animate-spin text-slate-700" size={48} />}
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-blue-900/20 backdrop-blur-sm"><Maximize2 size={48} className="text-white drop-shadow-lg" /></div>
                 </div>
 
