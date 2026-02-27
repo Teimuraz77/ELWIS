@@ -1,103 +1,49 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Loader2, Send, RefreshCw, BarChart3, Sparkles, Copy, Check, Zap, 
-  RotateCcw, Image as ImageIcon, X, CheckCircle2, Maximize2, 
+  RotateCcw, Image as ImageIcon, X, Maximize2, 
   AlignCenter, AlignJustify, AlignLeft, ShieldCheck, Rocket, CalendarDays, 
-  Clock, MessageCircle, Target, Briefcase, Key, ShieldAlert, Library, Save, Trash2, ChevronRight,
+  Clock, MessageCircle, Target, Briefcase, ShieldAlert, Library, Save, Trash2, ChevronRight,
   Building2, Globe2, Network, Lightbulb, Crosshair, Info
 } from 'lucide-react';
 
-// --- TYPES ---
-interface PostData {
-  micro: string;
-  short: string;
-  medium: string;
-  long: string;
-  image: string | null;
-  description: string;
-}
-
-interface ColumboData {
-  question: string;
-  options: string[];
-}
-
-interface Asset extends PostData {
-  id: number;
-  name: string;
-  topic: string;
-  scheduledDate: string;
-  persona: string;
-  companySize: string;
-  tone: string;
-  lang: string;
-  date: string;
-}
-
 export default function App() {
   // --- CORE STATE ---
-  const [activeStep, setActiveStep] = useState<string>('input'); 
-  const [language, setLanguage] = useState<string>('DE');
+  const [activeStep, setActiveStep] = useState('input'); 
   
-  // Konfiguration
-  const [companySize, setCompanySize] = useState<string>('Mittelstand');
-  const [persona, setPersona] = useState<string>('Geschäftsführung');
-  const [tone, setTone] = useState<string>('Analytisch');
-  const [input, setInput] = useState<string>(''); 
+  // Konfiguration (Horizontal, Ohne Startup)
+  const [companySize, setCompanySize] = useState('Mittelstand');
+  const [persona, setPersona] = useState('Geschäftsführung');
+  const [tone, setTone] = useState('Analytisch');
+  const [input, setInput] = useState(''); 
   
-  // --- API KEY (HART EINKODIERT) ---
+  // --- API KEY (WARNUNG: CLIENT-SIDE EXPOSED) ---
   const apiKey = "AIzaSyBqfwA5lTbTMssaZmbVneKanhskuVC0TpY"; 
 
-  // --- CONTENT STATE ---
-  const [columboData, setColumboData] = useState<ColumboData>({ question: '', options: [] });
-  const [customAnswer, setCustomAnswer] = useState<string>('');
-  const [selectedAnswer, setSelectedAnswer] = useState<string>('');
-  const [posts, setPosts] = useState<PostData>({ micro: '', short: '', medium: '', long: '', image: null, description: '' });
-  const [scheduleDate, setScheduleDate] = useState<string>('');
+  // --- APP STATE ---
+  const [columboData, setColumboData] = useState({ question: '', options: [] });
+  const [customAnswer, setCustomAnswer] = useState('');
+  const [selectedAnswer, setSelectedAnswer] = useState('');
+  const [posts, setPosts] = useState({ micro: '', short: '', medium: '', long: '', image: null, description: '' });
+  const [scheduleDate, setScheduleDate] = useState('');
   
   // --- UI STATE ---
-  const [progress, setProgress] = useState<number>(0);
-  const [progressLabel, setProgressLabel] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
+  const [progress, setProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState('');
+  const [loading, setLoading] = useState(false);
   const [loadingItems, setLoadingItems] = useState({ micro: false, short: false, medium: false, long: false, image: false });
-  const [error, setError] = useState<string | null>(null);
-  const [assetLibrary, setAssetLibrary] = useState<Asset[]>([]);
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
-  const [copiedType, setCopiedType] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [error, setError] = useState(null);
+  const [assetLibrary, setAssetLibrary] = useState([]);
+  const [copiedType, setCopiedType] = useState(null);
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   const pixelBarUrl = "https://images.unsplash.com/photo-1514933651103-005eec06c04b?q=80&w=1000&auto=format&fit=crop"; 
 
-  // --- TAILWIND FIX (THE REAL ONE) ---
-  // Wir laden das offizielle Tailwind Script, das moderne Klammer-Klassen [ ] versteht!
-  useEffect(() => {
-    if (!document.getElementById('tailwind-script')) {
-      const script = document.createElement('script');
-      script.id = 'tailwind-script';
-      script.src = "https://cdn.tailwindcss.com";
-      document.head.appendChild(script);
-    }
-  }, []);
-
-  // --- PROGRESS ANIMATION (Sichtbarer Ladebalken) ---
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (loading && progress < 98) {
-      interval = setInterval(() => {
-        setProgress((prev) => {
-          if (prev < 40) return prev + 5;
-          if (prev < 85) return prev + 1;
-          return prev + 0.2;
-        });
-      }, 300);
-    }
-    return () => clearInterval(interval!);
-  }, [loading, progress]);
-
-  // --- API SERVICE ---
-  const apiCall = async (url: string, payload: any, retries = 3): Promise<any> => {
-    if (!apiKey) throw new Error("API-Schlüssel fehlt!");
+  // --- ROBUST API SERVICE ---
+  const apiCall = async (url, payload, retries = 3) => {
+    if (!apiKey) throw new Error("Kein API-Schlüssel gefunden.");
     let delay = 1000;
+    
     for (let i = 0; i < retries; i++) {
       try {
         const response = await fetch(url, { 
@@ -105,263 +51,394 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' }, 
           body: JSON.stringify(payload) 
         });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP Error ${response.status}`);
+        }
+        
         return await response.json();
       } catch (err) {
-        if (i === retries - 1) throw new Error("KI-Distrikt meldet Funkstille. Bitte erneut versuchen.");
-        await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2;
+        if (i === retries - 1) throw new Error("Die KI ist aktuell nicht erreichbar. Bitte später versuchen.");
+        await new Promise(r => setTimeout(r, delay));
+        delay *= 2; // Exponentielles Backoff
       }
     }
   };
 
-  const parseJSON = (text: string): ColumboData | any => {
+  // --- PANZER-PARSER FÜR JSON ---
+  const parseColumboJSON = (text) => {
     try {
-      const cleaned = text.replace(/```json\n?/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleaned);
-      if (parsed.options) {
-        parsed.options = parsed.options.filter((o: string) => o && o.length > 1 && o !== "A" && o !== "B");
+      const match = text.match(/\{[\s\S]*\}/);
+      const jsonStr = match ? match[0] : text;
+      const parsed = JSON.parse(jsonStr);
+      
+      // Filtern von Halluzinationen
+      let safeOptions = [];
+      if (Array.isArray(parsed.options)) {
+          safeOptions = parsed.options.filter(o => typeof o === 'string' && o.length > 3 && !['A', 'B', 'Option A', 'Option B'].includes(o));
       }
-      return parsed;
+      
+      return { 
+          question: parsed.question || "Können Sie die strategische Ausrichtung präzisieren?", 
+          options: safeOptions 
+      };
     } catch (e) { 
-      return { question: "Können Sie den Fokus genauer beschreiben?", options: [] }; 
+        console.error("Columbo Parse Error:", e);
+        return { question: "Das Thema ist komplex. Was ist der genaue Fokus?", options: [] }; 
     }
   };
 
-  const checkRelevance = async (text: string): Promise<boolean> => {
-    try {
-      const res = await apiCall(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-        contents: [{ parts: [{ text: `Analyze for B2B/IT business relevance: "${text}". ONLY reply "OK" or "QUATSCH".` }] }]
-      });
-      return res.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toUpperCase() === "QUATSCH";
-    } catch (e) { return false; }
+  const parseContentJSON = (text) => {
+      try {
+          const match = text.match(/\{[\s\S]*\}/);
+          const jsonStr = match ? match[0] : text;
+          const parsed = JSON.parse(jsonStr);
+          return {
+              micro: parsed.micro || "Generierung fehlgeschlagen.",
+              short: parsed.short || "Generierung fehlgeschlagen.",
+              medium: parsed.medium || "Generierung fehlgeschlagen.",
+              long: parsed.long || "Generierung fehlgeschlagen.",
+              description: parsed.visual || "Enterprise architecture visualization"
+          };
+      } catch (e) {
+          console.error("Content Parse Error:", e);
+          throw new Error("Die KI hat ein ungültiges Format geliefert.");
+      }
   };
 
+  // --- DER TÜRSTEHER ---
+  const checkRelevance = async (text) => {
+    try {
+      const prompt = `Analysiere den folgenden Text auf Business-, Marketing- oder IT-Relevanz im B2B-Umfeld. Antworte AUSSCHLIESSLICH mit dem Wort "OK", wenn es relevant ist, oder mit dem Wort "QUATSCH", wenn es Unsinn, Beleidigungen oder komplett irrelevanter Text ist. Text: "${text}"`;
+      const res = await apiCall(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+        contents: [{ parts: [{ text: prompt }] }]
+      });
+      const answer = res.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toUpperCase();
+      return answer === "QUATSCH";
+    } catch (e) { 
+        return false; // Im Zweifelsfall durchwinken, damit das Tool nicht blockiert
+    }
+  };
+
+  // --- LOGIK ---
   const startInvestigation = async () => {
-    if (!input) return;
+    if (!input.trim()) return;
     setLoading(true);
-    setProgress(5);
-    setProgressLabel("Analysiere Zielvorgabe...");
     setError(null);
-    
-    if (await checkRelevance(input)) {
-        setError("Der Türsteher sagt: Das ist kein seriöses B2B Thema. Bitte definiere eine echte Strategie.");
+
+    const isNonsense = await checkRelevance(input);
+    if (isNonsense) {
+        setError("Der Türsteher blockiert: Das Thema hat keine Business-Relevanz. Bitte formulieren Sie eine ernsthafte Strategie.");
         setLoading(false);
-        setProgress(0);
         return;
     }
 
     try {
-      const prompt = `Du bist Inspektor Columbo. Kontext: B2B Marketing für ${companySize}. Persona: ${persona}. Tone: ${tone}. Thema: "${input}". Ask ONE short strategic follow-up question (max 10 words). JSON: {"question": "...", "options": ["Strategie A", "Strategie B"]}. Sprache: Deutsch.`;
+      const prompt = `Du bist Inspektor Columbo, ein brillanter B2B-Stratege. 
+      Kontext: Zielgruppe ist der ${companySize}. Angesprochen wird die Persona: ${persona}. Der gewünschte Tonfall ist ${tone}. 
+      Das übergeordnete Thema des Users ist: "${input}". 
+      Stelle EINE extrem kurze, scharfsinnige strategische Rückfrage (maximal 12 Wörter). 
+      Gib ZWEI konkrete strategische Antwortmöglichkeiten vor, die der User wählen könnte. 
+      Antworte AUSSCHLIESSLICH in diesem JSON-Format: {"question": "...", "options": ["Strategie 1", "Strategie 2"]}. 
+      Wenn das Thema zu vage für Optionen ist, lass das Array leer []. Sprache: Deutsch.`;
+
       const result = await apiCall(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
         contents: [{ parts: [{ text: input }] }],
         systemInstruction: { parts: [{ text: prompt }] },
         generationConfig: { responseMimeType: "application/json" }
       });
-      setColumboData(parseJSON(result.candidates[0].content.parts[0].text));
+      
+      const parsedData = parseColumboJSON(result.candidates[0].content.parts[0].text);
+      setColumboData(parsedData);
+      setCustomAnswer(''); // Reset custom answer field
       setActiveStep('columbo');
-    } catch (err: any) { 
-      setError(err.message || "Fehler bei der Initialisierung."); 
+    } catch (err) { 
+        setError(err.message); 
     } finally { 
-      setLoading(false); 
-      setProgress(0); 
+        setLoading(false); 
     }
   };
 
-  const runContentEngine = async (type: string, answer: string = '') => {
+  const executeGeneration = async (type, answer) => {
     const finalAnswer = answer || customAnswer;
     if (type === 'all') { 
-      setActiveStep('generating'); 
-      setProgress(10); 
-      setProgressLabel("Synthetisiere Enterprise Content..."); 
+        setActiveStep('generating'); 
+        setProgressLabel(`Synthetisiere Architektur für ${persona}...`); 
+        animateProgress();
     }
     setLoadingItems(prev => ({ ...prev, [type]: true, ...(type === 'all' && { micro: true, short: true, medium: true, long: true, image: true }) }));
     setLoading(true);
+    setError(null);
 
     try {
       if (type === 'all' || ['micro', 'short', 'medium', 'long'].includes(type)) {
-        const textPrompt = `Experte. Segment: ${companySize}. Persona: "${persona}". Ton: "${tone}". Thema: "${input}", Fokus: "${finalAnswer}". Erzeuge 4 Varianten: MICRO (<200 Zeichen Hook), KURZ (Snack), MITTEL (LinkedIn Feed), LANG (Deep-Dive). JSON: {"micro": "...", "short": "...", "medium": "...", "long": "...", "visual": "..."}. Sprache: Deutsch. KEIN ELVIS IM TEXT.`;
+        const textPrompt = `Du bist ein absoluter Top-Tier B2B Enterprise Marketing Experte.
+        Parameter:
+        - Ziel-Segment: ${companySize}
+        - Ziel-Persona: ${persona}
+        - Tonfall: ${tone}
+        - Kernthema: "${input}"
+        - Spezifischer Strategie-Fokus: "${finalAnswer}"
+        
+        Erzeuge 4 Textvarianten für eine Multi-Channel-Kampagne.
+        1. "micro": Ein extrem kurzer, provokanter Hook (MUSS unter 190 Zeichen sein).
+        2. "short": Ein knackiger Snack-Post (2-3 Sätze).
+        3. "medium": Ein strukturierter LinkedIn Standard Post.
+        4. "long": Ein tiefgehender Strategie-Beitrag oder Newsletter-Artikel.
+        5. "visual": Eine englische Bildbeschreibung (Prompt) für eine hochprofessionelle, abstrakte B2B Vektorgrafik passend zum Thema.
+
+        Antworte AUSSCHLIESSLICH im JSON-Format: {"micro": "...", "short": "...", "medium": "...", "long": "...", "visual": "..."}. 
+        Nutze niemals das Wort "Elvis". Sprache der Texte: Deutsch.`;
+
         const res = await apiCall(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
           contents: [{ parts: [{ text: finalAnswer }] }],
           generationConfig: { responseMimeType: "application/json" }
         });
-        const data = parseJSON(res.candidates[0].content.parts[0].text);
-        setPosts(prev => ({ ...prev, ...data, description: data.visual }));
+        
+        const data = parseContentJSON(res.candidates[0].content.parts[0].text);
+        setPosts(prev => ({ ...prev, ...data }));
       }
+
       if (type === 'all' || type === 'image') {
-        setProgressLabel("Rendere Brand Visual...");
         const imgRes = await apiCall(`https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`, {
-          instances: [{ prompt: `Ultra-premium corporate business infographic for ${persona} in ${companySize}, ${posts.description || 'data structure'}, royal blue theme, clean minimalist vector art, 8k.` }]
+          instances: [{ prompt: `Ultra-premium minimalist corporate business infographic for ${persona} in ${companySize}, concept: ${posts.description || 'data flow architecture'}, royal blue and dark slate theme, modern vector art, 8k resolution, clean background.` }]
         });
         if (imgRes.predictions?.[0]) {
-          setPosts(prev => ({ ...prev, image: `data:image/png;base64,${imgRes.predictions[0].bytesBase64Encoded}` }));
+            setPosts(prev => ({ ...prev, image: `data:image/png;base64,${imgRes.predictions[0].bytesBase64Encoded}` }));
         }
       }
       setActiveStep('result');
-    } catch (err: any) { 
-      setError("Engine Fehler: " + err.message); 
+    } catch (err) { 
+        setError(err.message); 
+        if(type === 'all') setActiveStep('columbo'); // Fallback on total failure
     } finally { 
-      setLoading(false); 
-      setLoadingItems({ micro: false, short: false, medium: false, long: false, image: false }); 
-      setProgress(0); 
+        setLoading(false); 
+        setLoadingItems({ micro: false, short: false, medium: false, long: false, image: false }); 
     }
+  };
+
+  const handleCustomColumboSubmit = () => {
+    if (!customAnswer.trim()) return;
+    executeGeneration('all', customAnswer);
   };
 
   const archiveAsset = async () => {
     setLoading(true);
     try {
       const nameRes = await apiCall(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-        contents: [{ parts: [{ text: `Gib mir 2-Wort Business Namen für: "${input}". NUR Text.` }] }]
+        contents: [{ parts: [{ text: `Generiere einen extrem kurzen, professionellen Namen aus genau 2 Worten für das Thema: "${input}". Gib NUR diesen Namen aus.` }] }]
       });
-      const name = nameRes.candidates[0].content.parts[0].text.trim().replace(/ /g, "_");
-      const newAsset: Asset = { id: Date.now(), name, ...posts, topic: input, scheduledDate: scheduleDate, persona, companySize, tone, lang: language, date: new Date().toLocaleDateString() };
+      const name = nameRes.candidates[0].content.parts[0].text.trim().replace(/[^a-zA-Z0-9\säöüßÄÖÜ]/g, "").replace(/\s+/g, "_");
+      
+      const newAsset = { 
+        id: Date.now(), 
+        name: name || "Kampagne_Alpha", 
+        ...posts, 
+        topic: input, 
+        scheduledDate: scheduleDate, 
+        persona, 
+        companySize, 
+        tone 
+      };
+      
       setAssetLibrary([newAsset, ...assetLibrary]);
       setActiveStep('library');
-    } catch (err) { setError("Speichern fehlgeschlagen."); }
-    finally { setLoading(false); }
+    } catch (err) { 
+        setError("Archivierung fehlgeschlagen."); 
+    } finally { 
+        setLoading(false); 
+    }
   };
 
-  const updateAsset = (id: number, newName: string) => {
-    setAssetLibrary(assetLibrary.map(a => a.id === id ? {...a, name: newName} : a));
-    setEditingId(null);
+  const loadFromArchive = (item) => {
+    setPosts(item);
+    setInput(item.topic);
+    setPersona(item.persona);
+    setCompanySize(item.companySize);
+    setTone(item.tone);
+    setScheduleDate(item.scheduledDate || '');
+    setActiveStep('result');
   };
 
-  // --- UI COMPONENTS ---
-  const HorizontalButton = ({ active, onClick, icon: Icon, label }: { active: boolean, onClick: () => void, icon: any, label: string }) => (
+  // Fake Progress Animation
+  const animateProgress = () => {
+      setProgress(0);
+      let p = 0;
+      const interval = setInterval(() => {
+          p += (Math.random() * 10);
+          if (p >= 95) {
+              clearInterval(interval);
+          } else {
+              setProgress(p);
+          }
+      }, 400);
+  };
+
+  // --- UI KOMPONENTEN ---
+  const HorizontalButton = ({ active, onClick, icon: Icon, label }) => (
     <button 
         onClick={onClick}
-        className={`flex-1 flex items-center justify-center gap-2 py-4 px-3 rounded-2xl border-2 transition-all duration-300 ${active ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] scale-105' : 'bg-slate-800/40 border-white/5 text-slate-400 hover:border-white/20 hover:bg-slate-800/80'}`}
+        className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-xl border-2 transition-all duration-300 ${active ? 'bg-blue-600 border-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:border-slate-500 hover:bg-slate-800'}`}
     >
         <Icon size={16} className={active ? 'text-white' : 'text-slate-500'} />
-        <span className="font-bold text-[11px] uppercase tracking-widest truncate">{label}</span>
+        <span className="font-black text-[11px] uppercase tracking-widest">{label}</span>
     </button>
   );
 
-  const ContentCard = ({ title, text, type, icon: Icon, color, charCount }: any) => (
-    <div className="bg-[#0F172A] border border-white/10 rounded-[2.5rem] p-8 relative flex flex-col h-full shadow-2xl transition-all hover:border-blue-500/40 group">
-      <div className={`absolute top-0 left-0 w-2 h-full ${color} rounded-l-[2.5rem]`}></div>
-      <div className="flex justify-between items-center mb-6 pl-4">
-        <div className="flex items-center gap-3"><Icon size={18} className="text-slate-400" /><span className="text-[11px] font-black uppercase tracking-widest text-slate-400">{title}</span></div>
-        <button onClick={() => {navigator.clipboard.writeText(text); setCopiedType(type); setTimeout(()=>setCopiedType(null), 2000)}} className="p-3 bg-white/5 rounded-full hover:bg-slate-800 transition-all text-slate-300">
-          {copiedType === type ? <Check size={18} className="text-green-400" /> : <Copy size={18} />}
+  const ContentCard = ({ title, text, type, icon: Icon, color, charCount }) => (
+    <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-6 relative flex flex-col h-full shadow-2xl transition-all hover:border-blue-900/50">
+      <div className={`absolute top-0 left-0 w-1.5 h-full ${color} rounded-l-[2rem]`}></div>
+      <div className="flex justify-between items-center mb-4 pl-2">
+        <div className="flex items-center gap-3"><Icon size={16} className="text-slate-400" /><span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{title}</span></div>
+        <button onClick={() => {navigator.clipboard.writeText(text); setCopiedType(type); setTimeout(()=>setCopiedType(null), 2000)}} className="p-2 hover:bg-slate-800 rounded-full transition-colors">
+          {copiedType === type ? <Check size={16} className="text-green-500" /> : <Copy size={16} className="text-slate-500 hover:text-slate-300" />}
         </button>
       </div>
-      <div className="bg-[#020617]/50 p-8 rounded-3xl border border-white/5 flex-1 overflow-hidden relative ml-4">
-        {loadingItems[type as keyof typeof loadingItems] && <div className="absolute inset-0 bg-[#0F172A]/90 flex items-center justify-center z-10"><Loader2 className="animate-spin text-blue-500" /></div>}
-        <p className={`text-slate-200 leading-relaxed whitespace-pre-wrap ${type === 'micro' ? 'font-bold text-xl italic text-blue-100' : 'text-sm font-medium'}`}>{text || "Warte auf Engine..."}</p>
-        {charCount && <div className={`mt-6 text-[10px] font-black text-right uppercase tracking-widest ${text.length > 200 ? 'text-red-500' : 'text-slate-600'}`}>{text.length} / 200 CHR</div>}
+      <div className="bg-slate-950/50 p-6 rounded-2xl border border-slate-800/50 flex-1 relative overflow-hidden">
+        {loadingItems[type] && <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-10"><Loader2 className="animate-spin text-blue-500" size={32}/></div>}
+        <p className={`text-slate-200 leading-relaxed whitespace-pre-wrap ${type === 'micro' ? 'font-bold text-lg italic text-blue-100' : 'text-sm'}`}>{text || "Warte auf Synthese..."}</p>
+        {charCount && <div className={`mt-4 text-[9px] font-bold text-right uppercase ${text.length > 200 ? 'text-red-500' : 'text-slate-600'}`}>{text.length} / 200</div>}
       </div>
+      <button onClick={() => executeGeneration(type, selectedAnswer)} disabled={loadingItems[type]} className="mt-4 w-full py-3 bg-slate-800/50 hover:bg-blue-900/30 text-slate-400 hover:text-blue-400 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border border-transparent hover:border-blue-800/50 disabled:opacity-50">
+          Regenerieren
+      </button>
     </div>
   );
 
   return (
-    <div className="min-h-screen w-full bg-[#020617] text-slate-200 font-sans selection:bg-blue-600/40 overflow-x-hidden">
+    <div className="min-h-screen w-full bg-[#020617] text-slate-200 font-sans selection:bg-blue-600/40 overflow-x-hidden flex flex-col">
       
-      {zoomedImage && <div className="fixed inset-0 z-[100] bg-black/98 flex items-center justify-center p-4 animate-in fade-in" onClick={() => setZoomedImage(null)}><img src={zoomedImage} className="max-w-full max-h-full object-contain rounded-3xl border border-white/10 shadow-3xl" alt="Preview" /></div>}
+      {/* Lightbox / Zoom */}
+      {zoomedImage && (
+          <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in" onClick={() => setZoomedImage(null)}>
+              <button className="absolute top-8 right-8 text-white/50 hover:text-white p-2 bg-white/10 rounded-full transition-all"><X size={32}/></button>
+              <img src={zoomedImage} className="max-w-full max-h-full object-contain rounded-2xl border border-slate-800 shadow-2xl" alt="Preview" />
+          </div>
+      )}
 
-      <header className="sticky top-0 z-50 bg-[#020617]/95 backdrop-blur-xl border-b border-white/10 p-5 px-10 flex justify-between items-center w-full shadow-2xl">
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-[#020617]/90 backdrop-blur-xl border-b border-slate-800 p-4 px-6 md:px-10 flex justify-between items-center shadow-2xl flex-shrink-0">
         <div className="flex items-center gap-6">
-          {activeStep !== 'input' && <button onClick={() => setActiveStep('input')} className="p-3 bg-white/5 rounded-full text-blue-400 hover:bg-white/10 transition-all active:scale-90"><RotateCcw size={20}/></button>}
+          {activeStep !== 'input' && <button onClick={() => setActiveStep('input')} className="p-2.5 bg-slate-800 rounded-full text-blue-400 hover:bg-blue-900/50 active:scale-95 transition-all"><RotateCcw size={18}/></button>}
           <div className="flex flex-col">
-            <h1 className="text-sm font-black uppercase tracking-[0.4em] text-white italic">ELWIS LAB</h1>
-            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v26.0 | BULLETPROOF EDITION</span>
+            <h1 className="text-sm font-black uppercase tracking-[0.2em] text-white">Marketing Architektur</h1>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none mt-1">v24.0 | EXECUTIVE MONOLITH</span>
           </div>
         </div>
-        <button onClick={() => setActiveStep('library')} className="p-4 bg-white/5 rounded-2xl border border-white/5 relative hover:bg-blue-600 transition-all">
-          <CalendarDays size={20} className="text-white" />
-          {assetLibrary.length > 0 && <span className="absolute -top-2 -right-2 w-6 h-6 bg-blue-500 rounded-full text-[10px] flex items-center justify-center font-black border-2 border-[#020617] shadow-lg text-white">{assetLibrary.length}</span>}
+        <button onClick={() => setActiveStep('library')} className="p-3 bg-slate-800 rounded-xl border border-slate-700 relative hover:bg-slate-700 transition-colors">
+          <CalendarDays size={18} className="text-slate-300" />
+          {assetLibrary.length > 0 && <span className="absolute -top-2 -right-2 w-5 h-5 bg-blue-600 rounded-full text-[10px] flex items-center justify-center font-bold border-2 border-[#020617]">{assetLibrary.length}</span>}
         </button>
       </header>
 
-      <main className="max-w-6xl mx-auto p-4 md:p-10 w-full flex flex-col flex-1">
+      {/* Main Content Area */}
+      <main className="max-w-6xl mx-auto p-4 md:p-8 w-full flex flex-col flex-1 relative">
         
-        {/* INPUT VIEW (TESLA STYLE) */}
+        {/* === STEP 1: ENGINE CONFIGURATION === */}
         {activeStep === 'input' && (
-          <div className="max-w-5xl mx-auto w-full space-y-12 animate-in slide-in-from-bottom-10 pt-10 flex-1 pb-40">
-            <div className="text-center space-y-5">
-                <div className="inline-flex items-center gap-3 bg-blue-900/30 text-blue-400 px-6 py-2 rounded-full border border-blue-500/30 mb-2 shadow-[0_0_15px_rgba(37,99,235,0.2)]"><ShieldCheck size={16} /> <span className="text-[11px] font-black uppercase tracking-[0.3em] italic">Strategic Architecture</span></div>
-                <h2 className="text-7xl font-black text-white leading-none tracking-tighter uppercase italic text-center">Engine Config.</h2>
+          <div className="max-w-4xl mx-auto w-full space-y-12 animate-in slide-in-from-bottom-8 pt-8 pb-20">
+            
+            <div className="text-center space-y-4">
+                <div className="inline-flex items-center gap-2 bg-blue-900/30 text-blue-400 px-5 py-1.5 rounded-full border border-blue-800/50 mb-2">
+                    <ShieldCheck size={14} /> <span className="text-[10px] font-black uppercase tracking-widest">Target Architecture Setup</span>
+                </div>
+                <h2 className="text-6xl font-black text-white leading-none tracking-tighter uppercase">Engine Config.</h2>
             </div>
             
-            <div className="bg-[#0F172A] p-12 rounded-[4rem] border border-white/10 shadow-[0_40px_100px_-20px_rgba(0,0,0,1)] space-y-12">
+            <div className="bg-slate-900/40 p-8 md:p-12 rounded-[3rem] border border-slate-800 shadow-2xl space-y-12">
                 
-                <div className="grid grid-cols-1 gap-12">
-                    {/* Segment (OHNE STARTUP!) */}
-                    <div className="space-y-4">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] text-center border-b border-white/5 pb-3">I. Business Segment</p>
-                        <div className="flex gap-6 max-w-xl mx-auto w-full">
+                <div className="space-y-8">
+                    {/* Segment */}
+                    <div className="space-y-3">
+                        <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 ml-2">Segment</h3>
+                        <div className="flex flex-col sm:flex-row gap-4">
                             <HorizontalButton active={companySize === 'Mittelstand'} onClick={() => setCompanySize('Mittelstand')} icon={Building2} label="Mittelstand" />
                             <HorizontalButton active={companySize === 'Konzern'} onClick={() => setCompanySize('Konzern')} icon={Globe2} label="Konzern" />
                         </div>
                     </div>
 
-                    <div className="space-y-4">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] text-center border-b border-white/5 pb-3">II. Target Persona</p>
-                        <div className="flex gap-6 w-full">
-                            <HorizontalButton active={persona === 'Geschäftsführung'} onClick={() => setPersona('Geschäftsführung')} icon={Briefcase} label="C-Level / Exec" />
-                            <HorizontalButton active={persona === 'Tech Lead'} onClick={() => setPersona('Tech Lead')} icon={Network} label="Tech / IT Lead" />
+                    {/* Persona */}
+                    <div className="space-y-3">
+                        <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 ml-2">Ziel-Persona</h3>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <HorizontalButton active={persona === 'Geschäftsführung'} onClick={() => setPersona('Geschäftsführung')} icon={Briefcase} label="C-Level" />
+                            <HorizontalButton active={persona === 'Tech Lead'} onClick={() => setPersona('Tech Lead')} icon={Network} label="Tech Lead" />
                             <HorizontalButton active={persona === 'Betriebsleiter'} onClick={() => setPersona('Betriebsleiter')} icon={Target} label="Ops Manager" />
                         </div>
                     </div>
 
-                    <div className="space-y-4">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] text-center border-b border-white/5 pb-3">III. Tone of Voice</p>
-                        <div className="flex gap-6 w-full">
+                    {/* Tonfall */}
+                    <div className="space-y-3">
+                        <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 ml-2">Tonfall</h3>
+                        <div className="flex flex-col sm:flex-row gap-4">
                             <HorizontalButton active={tone === 'Analytisch'} onClick={() => setTone('Analytisch')} icon={BarChart3} label="Analytisch" />
                             <HorizontalButton active={tone === 'Visionär'} onClick={() => setTone('Visionär')} icon={Lightbulb} label="Visionär" />
-                            <HorizontalButton active={tone === 'Direkt'} onClick={() => setTone('Direkt')} icon={Crosshair} label="Knallhart (Direkt)" />
+                            <HorizontalButton active={tone === 'Direkt'} onClick={() => setTone('Direkt')} icon={Crosshair} label="Direkt" />
                         </div>
                     </div>
                 </div>
 
-                {/* TEXT INPUT (Dunkle Black Box, weiße Schrift) */}
-                <div className="space-y-5 pt-12 border-t border-white/5 relative">
-                    <div className="flex justify-between items-center mb-2 px-2">
-                        <h3 className="text-[12px] font-black uppercase tracking-[0.4em] text-slate-400 italic">Strategic Input</h3>
-                        <div className="flex items-center gap-3 text-[10px] font-bold text-blue-300 bg-blue-900/30 px-5 py-2 rounded-full border border-blue-500/20"><Info size={14}/> Profi-Tipp: Längerer Text = Präzisere KI-Analyse.</div>
+                {/* TEXT INPUT */}
+                <div className="space-y-4 pt-8 border-t border-slate-800">
+                    <div className="flex justify-between items-end mb-2 ml-2">
+                        <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Thema / Strategischer Winkel</h3>
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-blue-400 bg-blue-900/20 px-3 py-1 rounded-full"><Info size={12}/> Mehr Text = Präzisere Analyse.</div>
                     </div>
+                    {/* HIER IST DIE SCHWARZE BOX MIT WEISSER SCHRIFT */}
                     <textarea 
-                        className="w-full h-56 p-12 bg-black border-2 border-slate-800 rounded-[3rem] outline-none text-2xl font-bold text-white placeholder:text-slate-700 focus:border-blue-600 transition-all shadow-inner focus:shadow-[0_0_50px_rgba(37,99,235,0.15)] leading-relaxed" 
-                        placeholder="Z.B. Warum traditionelle CRMs im Mittelstand bei 100+ Mitarbeitern versagen..." 
+                        className="w-full h-48 p-8 bg-black text-white text-xl font-bold placeholder:text-slate-700 outline-none rounded-[2rem] border border-slate-800 focus:border-blue-600 transition-colors shadow-inner resize-none" 
+                        placeholder="Beschreibe das Problem, die Lösung oder den Aufhänger..." 
                         value={input} 
                         onChange={(e) => setInput(e.target.value)} 
                     />
                 </div>
 
-                <button onClick={startInvestigation} disabled={loading || !input} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-12 rounded-[4rem] font-black text-sm uppercase tracking-[0.6em] shadow-[0_20px_50px_-10px_rgba(37,99,235,0.5)] flex items-center justify-center gap-6 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none">
-                  {loading ? <Loader2 className="animate-spin" size={28} /> : <Sparkles size={28} />} INITIATE ENGINE
+                <button onClick={startInvestigation} disabled={loading || !input.trim()} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-8 rounded-[2rem] font-black text-sm uppercase tracking-[0.4em] shadow-lg flex items-center justify-center gap-4 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
+                  {loading ? <Loader2 className="animate-spin" size={24}/> : <Sparkles size={24} />} ENGINE STARTEN
                 </button>
             </div>
           </div>
         )}
 
-        {/* COLUMBO NOIR (BAR VIEW) */}
+        {/* === STEP 2: COLUMBO PIXEL NOIR === */}
         {activeStep === 'columbo' && (
-          <div className="max-w-4xl mx-auto w-full animate-in zoom-in duration-700 flex-1 pb-32 pt-10">
-            <div className="bg-[#0F172A] rounded-[5rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,1)] overflow-hidden relative border border-white/10">
-                <div className="relative h-[32rem] w-full border-b-[10px] border-blue-600">
-                    <img src={pixelBarUrl} alt="Pixel Bar" className="w-full h-full object-cover grayscale contrast-125 brightness-[0.6] scale-105" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent opacity-100"></div>
-                    <div className="absolute bottom-16 left-16 p-10 bg-black/80 backdrop-blur-md rounded-[3rem] border border-white/10 max-w-md shadow-2xl">
-                        <span className="text-[11px] font-black uppercase tracking-[0.4em] text-blue-500">Strategic Triage</span>
-                        <p className="text-3xl font-black italic text-white leading-tight mt-4 tracking-tighter">"One more thing... let's talk real strategy."</p>
+          <div className="max-w-4xl mx-auto w-full animate-in zoom-in duration-500 pb-20">
+            <div className="bg-slate-900 rounded-[3rem] shadow-2xl overflow-hidden border border-slate-800">
+                {/* Header Image */}
+                <div className="relative h-[24rem] w-full border-b-[6px] border-blue-600 bg-black">
+                    <img src={pixelBarUrl} alt="Noir Bar" className="w-full h-full object-cover opacity-80" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
+                    <div className="absolute bottom-10 left-10 p-6 bg-black/70 backdrop-blur-md rounded-2xl border border-slate-700 max-w-sm">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">Strategisches Briefing</span>
+                        <p className="text-xl font-bold text-white leading-tight mt-2">"Sneak peak on the Zero Audit Trilogy..."</p>
                     </div>
                 </div>
                 
-                <div className="p-20 -mt-24 relative bg-[#0F172A] rounded-t-[5rem] text-center space-y-16">
-                    <div className="inline-block bg-white px-12 py-6 rounded-[2.5rem] shadow-2xl text-slate-900 font-black italic tracking-tighter text-2xl">Just one more thing...</div>
-                    <p className="text-4xl font-bold text-white italic border-l-8 border-blue-600 pl-12 text-left leading-relaxed tracking-tight">"{columboData.question}"</p>
+                {/* Content */}
+                <div className="p-10 md:p-16 text-center space-y-10">
+                    <div className="inline-block bg-slate-800 px-8 py-3 rounded-full border border-slate-700 shadow-inner">
+                        <h2 className="text-lg font-black uppercase tracking-widest text-slate-300">Just one more thing...</h2>
+                    </div>
                     
-                    <div className="grid grid-cols-1 gap-6">
+                    <p className="text-3xl font-bold text-white italic border-l-4 border-blue-500 pl-8 text-left leading-relaxed">"{columboData.question}"</p>
+                    
+                    <div className="grid grid-cols-1 gap-4 pt-6">
                         {columboData.options && columboData.options.map((opt, i) => (
-                            <button key={i} onClick={() => {setSelectedAnswer(opt); runContentEngine('all', opt);}} className="bg-slate-800/50 hover:bg-blue-600 text-white p-10 rounded-[3rem] text-lg font-black transition-all border border-white/5 flex items-center justify-between group px-16 shadow-lg">
-                                {opt} <ChevronRight size={32} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-4 transition-all text-blue-200" />
+                            <button key={i} onClick={() => {setSelectedAnswer(opt); runContentEngine('all', opt);}} className="bg-slate-800 hover:bg-blue-600 text-slate-200 hover:text-white p-6 rounded-2xl text-left font-bold transition-colors border border-slate-700 hover:border-blue-500 flex items-center justify-between group">
+                                {opt} <ChevronRight size={24} className="opacity-50 group-hover:opacity-100 group-hover:translate-x-2 transition-all" />
                             </button>
                         ))}
-                        <div className="space-y-8 mt-16 pt-16 border-t border-slate-800 text-left">
-                            <textarea className="w-full p-12 bg-black border-2 border-slate-800 rounded-[3.5rem] font-bold outline-none text-white focus:border-blue-600 h-44 text-xl shadow-inner focus:shadow-[0_0_30px_rgba(37,99,235,0.1)]" placeholder="Eigene Details hinzufügen..." value={customAnswer} onChange={(e) => setCustomAnswer(e.target.value)} />
-                            <button onClick={() => runContentEngine('all', customAnswer)} disabled={loading || !customAnswer.trim()} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-12 rounded-[4rem] font-black uppercase text-sm flex items-center justify-center gap-6 hover:scale-[1.02] shadow-[0_20px_40px_-10px_rgba(37,99,235,0.4)] transition-all tracking-[0.4em] disabled:opacity-30 disabled:scale-100">
-                                {loading ? <Loader2 className="animate-spin" size={28}/> : <Send size={28}/>} BEWEIS ABSENDEN
+                        
+                        <div className="space-y-4 mt-8 pt-8 border-t border-slate-800 text-left">
+                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 ml-2">Eigener strategischer Kontext</label>
+                            <textarea 
+                                className="w-full p-6 bg-black text-white text-lg rounded-2xl border border-slate-700 outline-none focus:border-blue-500 h-32 resize-none" 
+                                placeholder="Eigene Details eingeben..." 
+                                value={customAnswer} 
+                                onChange={(e) => setCustomAnswer(e.target.value)} 
+                            />
+                            <button onClick={() => runContentEngine('all', customAnswer)} disabled={loading || !customAnswer.trim()} className="w-full bg-slate-100 hover:bg-white text-slate-900 py-6 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-3 transition-all disabled:opacity-50">
+                                {loading ? <Loader2 className="animate-spin" size={20}/> : <Send size={20}/>} ANTWORT BESTÄTIGEN
                             </button>
                         </div>
                     </div>
@@ -370,117 +447,153 @@ export default function App() {
           </div>
         )}
 
-        {/* LOADING (DER NEUE GROSSE LADEBALKEN) */}
+        {/* === STEP 3: LOADING === */}
         {activeStep === 'generating' && (
-          <div className="max-w-xl mx-auto py-56 space-y-16 text-center animate-in fade-in flex-1">
-            <div className="relative inline-flex items-center justify-center scale-[2] mb-16">
-                <div className="w-32 h-32 border-[6px] border-blue-900/30 rounded-full border-t-blue-500 animate-spin" />
-                <Zap size={40} className="absolute m-auto text-blue-500 fill-blue-500 animate-pulse" />
+          <div className="max-w-md mx-auto w-full py-32 text-center animate-in fade-in flex flex-col items-center justify-center flex-1">
+            <div className="relative mb-10">
+                <div className="w-24 h-24 border-[4px] border-slate-800 rounded-full border-t-blue-500 animate-spin" />
+                <Zap size={28} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-500" />
             </div>
-            <div className="space-y-6">
-                <h2 className="text-4xl font-black uppercase italic tracking-[0.3em] text-white drop-shadow-lg">{progressLabel || "Synthesizing Asset"}</h2>
-                <div className="w-full bg-slate-900 h-6 rounded-full overflow-hidden border-2 border-slate-800 shadow-inner p-1">
-                    <div className="h-full bg-blue-600 rounded-full transition-all duration-300 shadow-[0_0_20px_rgba(37,99,235,0.8)] relative overflow-hidden" style={{ width: `${progress}%` }}>
-                        <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]"></div>
-                    </div>
-                </div>
-                <p className="text-xs font-black text-blue-500 uppercase tracking-[0.6em]">{Math.round(progress)}% Integrated</p>
+            <h2 className="text-2xl font-black uppercase tracking-[0.2em] text-white mb-6">{progressLabel}</h2>
+            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-4">
+                <div className="h-full bg-blue-500 rounded-full transition-all duration-300 ease-out" style={{ width: `${progress}%` }} />
             </div>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{Math.round(progress)}% Synthetisiert</p>
           </div>
         )}
 
-        {/* RESULT VIEW */}
+        {/* === STEP 4: RESULTS === */}
         {activeStep === 'result' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 animate-in fade-in slide-in-from-bottom-10 pb-32 w-full pt-10">
-            <div className="lg:col-span-7 space-y-12">
-              <div className="flex gap-6 p-8 bg-[#0F172A] border border-white/10 rounded-[3rem] items-center shadow-2xl">
-                 <div className="flex flex-col flex-1 px-4 border-r border-slate-700"><span className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Segment</span><span className="text-sm text-white font-bold">{companySize}</span></div>
-                 <div className="flex flex-col flex-1 px-4 border-r border-slate-700"><span className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Persona</span><span className="text-sm text-white font-bold">{persona}</span></div>
-                 <div className="flex flex-col flex-1 px-4"><span className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Tone</span><span className="text-sm text-white font-bold">{tone}</span></div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in slide-in-from-bottom-8 pb-20 pt-4">
+            
+            <div className="lg:col-span-7 space-y-8">
+              {/* Context Bar */}
+              <div className="flex bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+                 <div className="flex flex-col flex-1 p-4 border-r border-slate-800">
+                    <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Segment</span>
+                    <span className="text-xs text-white font-bold">{companySize}</span>
+                 </div>
+                 <div className="flex flex-col flex-1 p-4 border-r border-slate-800">
+                    <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Persona</span>
+                    <span className="text-xs text-white font-bold">{persona}</span>
+                 </div>
+                 <div className="flex flex-col flex-1 p-4">
+                    <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Tonfall</span>
+                    <span className="text-xs text-white font-bold">{tone}</span>
+                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                 <ContentCard title="Micro Hook" text={posts.micro} type="micro" icon={MessageCircle} color="bg-blue-500" charCount={true} />
+
+              {/* Text Outputs */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <ContentCard title="Micro Hook" text={posts.micro} type="micro" icon={MessageCircle} color="bg-blue-400" charCount={true} />
                  <ContentCard title="Snack Post" text={posts.short} type="short" icon={AlignLeft} color="bg-blue-600" />
               </div>
-              <ContentCard title="Standard LinkedIn Post" text={posts.medium} type="medium" icon={AlignCenter} color="bg-slate-500" />
-              <ContentCard title="Strategic Deep-Dive" text={posts.long} type="long" icon={AlignJustify} color="bg-slate-700" />
+              <ContentCard title="LinkedIn Standard" text={posts.medium} type="medium" icon={AlignCenter} color="bg-slate-600" />
+              <ContentCard title="Strategic Deep-Dive" text={posts.long} type="long" icon={AlignJustify} color="bg-slate-800" />
             </div>
             
-            <div className="lg:col-span-5 flex flex-col gap-12">
-              <div className="bg-[#0F172A] p-10 rounded-[5rem] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)] border border-white/10">
-                <div className="flex justify-between items-center mb-8 px-4">
-                    <span className="text-[12px] font-black uppercase tracking-[0.4em] text-slate-400">Brand Visual</span>
-                    <button onClick={() => runContentEngine('image')} className="p-4 bg-slate-800 rounded-full hover:bg-blue-600 hover:text-white transition-all text-slate-300">
-                        <RefreshCw size={20} className={loadingItems.image ? 'animate-spin' : ''}/>
+            <div className="lg:col-span-5 flex flex-col gap-8">
+              {/* Visual Asset */}
+              <div className="bg-slate-900 p-6 md:p-8 rounded-[2.5rem] shadow-xl border border-slate-800">
+                <div className="flex justify-between items-center mb-6">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-2">Brand Visual</span>
+                    <button onClick={() => runContentEngine('image', selectedAnswer)} disabled={loadingItems.image} className="p-2 bg-slate-800 rounded-full hover:bg-blue-600 transition-colors text-slate-400 hover:text-white disabled:opacity-50">
+                        <RefreshCw size={16} className={loadingItems.image ? 'animate-spin' : ''}/>
                     </button>
                 </div>
-                <div className="aspect-square bg-black rounded-[4rem] border-[12px] border-slate-900 overflow-hidden flex items-center justify-center relative group cursor-zoom-in mb-10 shadow-inner" onClick={() => posts.image && setZoomedImage(posts.image)}>
-                    {loadingItems.image && <div className="absolute inset-0 bg-[#0F172A]/90 flex items-center justify-center z-20"><Loader2 className="animate-spin text-blue-500" size={64} /></div>}
-                    {posts.image ? <img src={posts.image} alt="Visual" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" /> : <Loader2 className="animate-spin text-slate-700" size={48} />}
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-blue-900/20 backdrop-blur-sm"><Maximize2 size={48} className="text-white drop-shadow-lg" /></div>
+                
+                <div className="aspect-square bg-black rounded-[2rem] overflow-hidden flex items-center justify-center border-4 border-slate-950 shadow-inner relative group cursor-zoom-in mb-6" onClick={() => posts.image && setZoomedImage(posts.image)}>
+                    {loadingItems.image && <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-20"><Loader2 className="animate-spin text-blue-500" size={40} /></div>}
+                    {posts.image ? <img src={posts.image} alt="Generiertes Visual" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" /> : (!loadingItems.image && <ImageIcon className="text-slate-700" size={48}/>)}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-blue-900/20"><Maximize2 size={32} className="text-white drop-shadow-md" /></div>
                 </div>
-                <div className="bg-black/50 p-6 rounded-[2.5rem] border border-slate-800 mb-8 space-y-4">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-2 flex items-center gap-3"><CalendarDays size={14}/> Schedule Date</label>
-                    <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} className="w-full p-5 bg-slate-900 border-2 border-slate-800 rounded-3xl text-white outline-none text-sm font-bold focus:border-blue-600 transition-colors" />
+                
+                {/* Save Logic */}
+                <div className="space-y-4 border-t border-slate-800 pt-6">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2 ml-1"><CalendarDays size={14}/> Geplanter Termin</label>
+                    <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} className="w-full p-4 bg-black border border-slate-700 rounded-xl text-white outline-none text-sm focus:border-blue-500 font-medium" />
+                    
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                        <button onClick={archiveAsset} disabled={loading} className="py-4 bg-green-600/90 hover:bg-green-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+                            <Save size={16}/> Speichern
+                        </button>
+                        <button onClick={() => setActiveStep('library')} className="py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors flex items-center justify-center gap-2">
+                            <Library size={16}/> Archiv
+                        </button>
+                    </div>
                 </div>
-                <div className="grid grid-cols-2 gap-6">
-                    <button onClick={archiveAsset} disabled={loading} className="py-10 bg-green-600 text-white rounded-[3.5rem] font-black text-xs uppercase shadow-[0_15px_30px_-10px_rgba(22,163,74,0.5)] hover:bg-green-500 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50"><Save size={24}/> SAVE</button>
-                    <button onClick={() => setActiveStep('library')} className="py-10 bg-slate-800 text-white rounded-[3.5rem] font-black text-xs uppercase shadow-xl hover:bg-slate-700 active:scale-95 flex items-center justify-center gap-3 transition-all"><Library size={24}/> VAULT</button>
-                </div>
+              </div>
+              
+              {/* Q2 Teaser */}
+              <div className="bg-gradient-to-br from-slate-900 to-black p-8 rounded-[2.5rem] border border-slate-800 text-center relative overflow-hidden">
+                 <Rocket size={120} className="absolute -right-4 -bottom-4 text-slate-800 opacity-20 rotate-12" />
+                 <div className="relative z-10 flex flex-col items-center">
+                     <span className="px-3 py-1 bg-blue-900/30 text-blue-400 text-[9px] font-black uppercase tracking-widest rounded-full mb-3 border border-blue-800/50">Q2 Roadmap</span>
+                     <h4 className="text-xl font-black text-white uppercase tracking-tight">King of Leads</h4>
+                     <p className="text-xs text-slate-500 mt-2">Autonome Pipeline in Vorbereitung.</p>
+                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* VAULT VIEW */}
+        {/* === STEP 5: VAULT / LIBRARY === */}
         {activeStep === 'library' && (
-          <div className="space-y-16 animate-in slide-in-from-right-16 pb-32 px-4 w-full flex-1 flex flex-col pt-10">
-            <div className="flex justify-between items-end px-6 border-b border-slate-800 pb-10">
-                <div><h2 className="text-8xl font-black uppercase italic tracking-tighter text-white leading-none">The Vault.</h2><p className="text-blue-500 text-[12px] font-bold uppercase tracking-[0.6em] mt-8">Strategic Asset Management</p></div>
-                <button onClick={() => setActiveStep('input')} className="bg-white text-slate-900 px-16 py-6 rounded-full text-[12px] font-black uppercase shadow-[0_0_30px_rgba(255,255,255,0.2)] hover:scale-105 active:scale-95 transition-all tracking-[0.3em]">Studio Return</button>
+          <div className="space-y-10 animate-in slide-in-from-right-8 pb-20 pt-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 border-b border-slate-800 pb-8">
+                <div>
+                    <h2 className="text-5xl font-black uppercase tracking-tighter text-white">The Vault.</h2>
+                    <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.4em] mt-2">Kampagnen-Repository</p>
+                </div>
+                <button onClick={() => setActiveStep('input')} className="bg-white text-black px-8 py-3 rounded-full text-[10px] font-black uppercase shadow-lg hover:bg-slate-200 transition-colors">
+                    Neuer Track
+                </button>
             </div>
+            
             {assetLibrary.length === 0 ? (
-                <div className="bg-[#0F172A]/50 p-60 rounded-[8rem] text-center border-4 border-dashed border-slate-800 flex flex-col items-center justify-center shadow-inner">
-                    <Library size={100} className="text-slate-800 mb-12" />
-                    <p className="text-slate-600 text-sm font-black uppercase tracking-[0.6em] italic">Vault is empty.</p>
+                <div className="py-32 text-center flex flex-col items-center justify-center bg-slate-900/30 rounded-[3rem] border border-slate-800 border-dashed">
+                    <Library size={48} className="text-slate-700 mb-6" />
+                    <p className="text-slate-500 text-sm font-medium">Das Archiv ist noch leer.</p>
                 </div>
             ) : (
-                <div className="space-y-16 border-l-4 border-blue-900/40 pl-16 ml-10 mt-16">
-                    {assetLibrary.map((item) => (
-                        <div key={item.id} className="relative group">
-                            <div className="absolute -left-[4.6rem] top-12 w-10 h-10 bg-blue-600 rounded-full border-4 border-[#020617] shadow-[0_0_20px_rgba(37,99,235,0.6)] group-hover:scale-125 transition-transform duration-500"></div>
-                            <div className="bg-[#0F172A] rounded-[5rem] border border-white/5 overflow-hidden flex flex-col shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] hover:-translate-y-4 transition-all duration-500">
-                                <div className="p-12 bg-black/50 text-white flex justify-between items-center border-b border-white/5">
-                                    <div className="flex items-center gap-10 flex-1">
-                                        <div className="bg-blue-900/30 text-blue-400 px-6 py-3 rounded-2xl border border-blue-500/30 flex items-center gap-4"><Clock size={20}/> <span className="text-sm font-black uppercase tracking-widest">{item.scheduledDate || 'DRAFT'}</span></div>
-                                        
-                                        {editingId === item.id ? (
-                                            <div className="flex items-center gap-4 flex-1 max-w-md">
-                                                <input type="text" className="bg-slate-900 text-white px-6 py-3 rounded-2xl w-full outline-none font-bold text-lg border-2 border-blue-500" defaultValue={item.name} onBlur={(e) => updateAsset(item.id, e.target.value)} onKeyDown={(e) => e.key === 'Enter' && updateAsset(item.id, e.currentTarget.value)} autoFocus />
-                                                <CheckCircle2 size={32} className="text-green-500 cursor-pointer" onClick={(e) => { const input = e.currentTarget.previousSibling as HTMLInputElement; updateAsset(item.id, input.value); }} />
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-6 flex-1 overflow-hidden">
-                                                <span className="text-3xl font-black uppercase truncate italic tracking-tighter opacity-90">{item.name}</span>
-                                                <button onClick={() => setEditingId(item.id)} className="p-3 rounded-full bg-white/5 opacity-50 hover:opacity-100 transition-opacity"><Edit3 size={20}/></button>
-                                            </div>
-                                        )}
+                <div className="space-y-6">
+                    {assetLibrary.sort((a,b) => new Date(a.scheduledDate) - new Date(b.scheduledDate)).map((item) => (
+                        <div key={item.id} className="bg-slate-900 rounded-[2rem] border border-slate-800 overflow-hidden flex flex-col md:flex-row transition-all hover:border-slate-600 group">
+                            
+                            {/* Visual Thumbnail (if any) */}
+                            {item.image ? (
+                                <div className="w-full md:w-48 h-48 md:h-auto bg-black relative flex-shrink-0 cursor-zoom-in" onClick={() => setZoomedImage(item.image)}>
+                                    <img src={item.image} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="Thumb"/>
+                                    <div className="absolute inset-0 border-r border-slate-800"></div>
+                                </div>
+                            ) : (
+                                <div className="w-full md:w-48 h-48 md:h-auto bg-slate-950 flex items-center justify-center border-r border-slate-800 flex-shrink-0">
+                                    <ImageIcon size={32} className="text-slate-800" />
+                                </div>
+                            )}
+
+                            {/* Content Info */}
+                            <div className="p-6 md:p-8 flex-1 flex flex-col">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div>
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <span className="text-[9px] font-black uppercase bg-slate-800 text-slate-300 px-2 py-1 rounded">{item.companySize}</span>
+                                            <span className="text-[9px] font-black uppercase bg-blue-900/30 text-blue-400 px-2 py-1 rounded border border-blue-800/30">{item.persona}</span>
+                                        </div>
+                                        <h3 className="text-xl font-black uppercase tracking-tight text-white">{item.name}</h3>
                                     </div>
-                                    <div className="flex items-center gap-8 ml-8">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">{item.companySize}</span>
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 bg-blue-900/20 px-4 py-2 rounded-xl border border-blue-900/50">{item.persona}</span>
-                                        <button onClick={() => setAssetLibrary(assetLibrary.filter(a => a.id !== item.id))} className="text-slate-600 hover:text-red-500 transition-all p-4 bg-black/40 rounded-full hover:bg-red-500/10"><Trash2 size={24} /></button>
+                                    <div className="flex flex-col items-end gap-3">
+                                        {item.scheduledDate && <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-bold"><CalendarDays size={12}/> {item.scheduledDate}</div>}
+                                        <button onClick={() => setAssetLibrary(assetLibrary.filter(a => a.id !== item.id))} className="text-slate-600 hover:text-red-500 transition-colors p-1"><Trash2 size={16} /></button>
                                     </div>
                                 </div>
-                                <div className="p-20 flex flex-col md:flex-row gap-20 items-center relative">
-                                    {item.image && <div className="md:w-1/3 aspect-square rounded-[4rem] overflow-hidden shadow-2xl flex-shrink-0 cursor-zoom-in border-[8px] border-slate-900" onClick={() => setZoomedImage(item.image)}><img src={item.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" /></div>}
-                                    <div className="flex-1 flex flex-col justify-center space-y-10 z-10">
-                                        <p className="text-[11px] font-black text-blue-500 uppercase tracking-[0.5em] italic">Micro Hook / Core Angle</p>
-                                        <p className="text-4xl font-bold text-white line-clamp-3 italic tracking-tight leading-snug">"{item.micro}"</p>
-                                        <div className="pt-12 mt-auto flex gap-6">
-                                          <button onClick={() => {setPosts(item); setInput(item.topic); setActiveStep('result');}} className="px-16 py-8 bg-blue-600 text-white text-sm font-black uppercase tracking-[0.4em] hover:bg-blue-500 transition-all rounded-[3rem] shadow-[0_15px_30px_-10px_rgba(37,99,235,0.5)]">ASSET LADEN</button>
-                                        </div>
-                                    </div>
+                                
+                                <p className="text-sm text-slate-400 line-clamp-2 leading-relaxed flex-1 italic">"{item.micro}"</p>
+                                
+                                <div className="mt-6 pt-4 border-t border-slate-800">
+                                    <button onClick={() => loadFromArchive(item)} className="text-[10px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300 flex items-center gap-2">
+                                        Im Studio öffnen <ChevronRight size={14} />
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -490,26 +603,15 @@ export default function App() {
           </div>
         )}
 
-        {/* ERROR OVERLAY */}
+        {/* --- GLOBAL ERROR ALERT --- */}
         {error && (
-          <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-600 text-white px-12 py-8 rounded-[3rem] shadow-[0_0_100px_rgba(220,38,38,0.5)] flex items-center gap-8 animate-bounce z-[100] border-4 border-red-500">
-            <ShieldAlert size={40} />
-            <div className="flex flex-col">
-              <span className="text-xl font-black uppercase italic leading-none tracking-tighter">{error}</span>
-            </div>
-            <button onClick={() => setError(null)} className="opacity-50 hover:opacity-100 transition-opacity p-2"><X size={32}/></button>
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-red-950 text-red-200 px-6 py-4 rounded-2xl shadow-2xl border border-red-900 flex items-center gap-4 z-[200] max-w-[90vw] animate-in slide-in-from-bottom-4">
+            <ShieldAlert size={20} className="text-red-500 flex-shrink-0" />
+            <span className="text-sm font-medium">{error}</span>
+            <button onClick={() => setError(null)} className="ml-2 p-1 text-red-500 hover:text-red-300 rounded"><X size={16}/></button>
           </div>
         )}
       </main>
-      
-      <style>{`
-        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-        .cursor-zoom-in { cursor: zoom-in; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #020617; }
-        ::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
-      `}</style>
     </div>
   );
 }
