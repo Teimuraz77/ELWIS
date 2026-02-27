@@ -8,28 +8,23 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  // --- CORE STATE ---
   const [activeStep, setActiveStep] = useState('input'); 
   const [language, setLanguage] = useState('DE');
   
-  // Konfiguration
   const [companySize, setCompanySize] = useState('Mittelstand');
   const [persona, setPersona] = useState('Geschäftsführung');
   const [tone, setTone] = useState('Analytisch');
   const [input, setInput] = useState(''); 
   
-  // --- API KEY ---
-  // HIER DEINEN SCHLÜSSEL EINTRAGEN BEVOR DU ES AUF VERCEL PUSHST!
+  // ---> HIER DEINEN API KEY EINTRAGEN <---
   const apiKey = ""; 
 
-  // --- CONTENT STATE ---
   const [columboData, setColumboData] = useState({ question: '', options: [] });
   const [customAnswer, setCustomAnswer] = useState('');
   const [selectedAnswer, setSelectedAnswer] = useState('');
   const [posts, setPosts] = useState({ micro: '', short: '', medium: '', long: '', image: null, description: '' });
   const [scheduleDate, setScheduleDate] = useState('');
   
-  // --- UI STATE ---
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,8 +37,7 @@ export default function App() {
 
   const pixelBarUrl = "https://images.unsplash.com/photo-1514933651103-005eec06c04b?q=80&w=1000&auto=format&fit=crop"; 
 
-  // --- TAILWIND FIX (THE REAL ONE) ---
-  // Lädt Tailwind direkt in die App, falls die index.html kaputt ist.
+  // Lädt das Design (Tailwind) absolut sicher nach
   useEffect(() => {
     if (!document.getElementById('tailwind-script')) {
       const script = document.createElement('script');
@@ -53,7 +47,7 @@ export default function App() {
     }
   }, []);
 
-  // --- PROGRESS ANIMATION ---
+  // Ladebalken-Animation
   useEffect(() => {
     let interval;
     if (loading && progress < 98) {
@@ -68,11 +62,10 @@ export default function App() {
     return () => clearInterval(interval);
   }, [loading, progress]);
 
-  // --- API SERVICE ---
+  // Robuster API Call mit Wiederholungen
   const apiCall = async (url, payload) => {
     const retries = 5;
     const delays = [1000, 2000, 4000, 8000, 16000];
-    
     for (let i = 0; i < retries; i++) {
       try {
         const response = await fetch(url, { 
@@ -80,15 +73,10 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' }, 
           body: JSON.stringify(payload) 
         });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP Error: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
         return await response.json();
       } catch (err) {
-        if (i === retries - 1) {
-            throw new Error("KI-Distrikt meldet Funkstille. Die Verbindung konnte nicht hergestellt werden.");
-        }
+        if (i === retries - 1) throw new Error("KI-Distrikt meldet Funkstille. Verbindung fehlgeschlagen.");
         await new Promise(resolve => setTimeout(resolve, delays[i]));
       }
     }
@@ -104,24 +92,21 @@ export default function App() {
     }
   };
 
-  // --- DER TÜRSTEHER ---
+  // Türsteher für Unsinn
   const checkRelevance = async (text) => {
     try {
       const res = await apiCall(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-        contents: [{ parts: [{ text: `Analysiere den folgenden Text streng auf Business/IT/Marketing Relevanz: "${text}". Antworte AUSSCHLIESSLICH mit "OK", wenn es ein seriöses Thema ist, oder "QUATSCH", wenn es Unsinn, Spam oder völlig themenfremd ist.` }] }]
+        contents: [{ parts: [{ text: `Analysiere den Text auf Business/IT/Marketing Relevanz: "${text}". Antworte AUSSCHLIESSLICH "OK" (seriös) oder "QUATSCH" (Unsinn/Spam).` }] }]
       });
       const answer = res.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toUpperCase();
       return answer === "QUATSCH";
-    } catch (e) { 
-        return false; 
-    }
+    } catch (e) { return false; }
   };
 
-  // --- AKTIONEN ---
   const startInvestigation = async () => {
     if (!input.trim()) return;
     if (!apiKey) {
-      setError("API-Schlüssel fehlt in der App.jsx! Trage ihn oben im Code ein.");
+      setError("API-Schlüssel fehlt! Trage ihn in Zeile 16 im Code ein.");
       return;
     }
 
@@ -131,7 +116,7 @@ export default function App() {
     setError(null);
     
     if (await checkRelevance(input)) {
-        setError("Der Türsteher blockiert: Das Thema hat keine Business-Relevanz. Bitte formulieren Sie eine ernsthafte Strategie.");
+        setError("Türsteher blockiert: Kein Business-Thema. Bitte formulieren Sie eine ernsthafte Strategie.");
         setLoading(false);
         setProgress(0);
         return;
@@ -159,7 +144,7 @@ export default function App() {
       setCustomAnswer('');
       setActiveStep('columbo');
     } catch (err) { 
-      setError(err.message || "Ein Fehler ist bei der Initialisierung aufgetreten."); 
+      setError(err.message || "Fehler bei der Initialisierung."); 
     } finally { 
       setLoading(false); 
       setProgress(0); 
@@ -179,14 +164,14 @@ export default function App() {
 
     try {
       if (type === 'all' || ['micro', 'short', 'medium', 'long'].includes(type)) {
-        const textPrompt = `Du bist ein Top-Tier B2B Enterprise Marketing Experte. Segment: ${companySize}. Persona: "${persona}". Tonfall: "${tone}". Kernthema: "${input}", Fokus: "${finalAnswer}". 
-        Erzeuge 4 Textvarianten für eine Multi-Channel-Kampagne:
-        1. "micro": Ein extrem kurzer, provokanter Hook (MUSS unter 190 Zeichen sein).
+        const textPrompt = `B2B Enterprise Experte. Segment: ${companySize}. Persona: "${persona}". Tonfall: "${tone}". Kernthema: "${input}", Fokus: "${finalAnswer}". 
+        Erzeuge 4 Textvarianten:
+        1. "micro": Ein extrem kurzer Hook (unter 190 Zeichen).
         2. "short": Ein knackiger Snack-Post (2-3 Sätze).
-        3. "medium": Ein strukturierter LinkedIn Standard Post.
+        3. "medium": Ein LinkedIn Standard Post.
         4. "long": Ein tiefgehender Strategie-Beitrag.
         5. "visual": Eine englische Bildbeschreibung für eine abstrakte B2B Vektorgrafik.
-        Antworte AUSSCHLIESSLICH im JSON-Format: {"micro": "...", "short": "...", "medium": "...", "long": "...", "visual": "..."}. Sprache: Deutsch.`;
+        JSON-Format: {"micro": "...", "short": "...", "medium": "...", "long": "...", "visual": "..."}. Sprache: Deutsch. KEIN ELVIS IM TEXT.`;
         
         const res = await apiCall(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
           contents: [{ parts: [{ text: finalAnswer }] }],
@@ -230,7 +215,7 @@ export default function App() {
     setLoading(true);
     try {
       const nameRes = await apiCall(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-        contents: [{ parts: [{ text: `Generiere einen extrem kurzen Namen (max 2 Worte) für dieses Thema: "${input}". NUR Text ausgeben.` }] }]
+        contents: [{ parts: [{ text: `Generiere einen kurzen Namen (max 2 Worte) für dieses Thema: "${input}". NUR Text ausgeben.` }] }]
       });
       const name = nameRes.candidates[0].content.parts[0].text.trim().replace(/[^a-zA-Z0-9\säöüßÄÖÜ]/g, "").replace(/\s+/g, "_");
       
@@ -249,7 +234,7 @@ export default function App() {
       
       setAssetLibrary([newAsset, ...assetLibrary]);
       setActiveStep('library');
-    } catch (err) { setError("Speichern in den Vault fehlgeschlagen."); }
+    } catch (err) { setError("Speichern fehlgeschlagen."); }
     finally { setLoading(false); }
   };
 
@@ -268,7 +253,7 @@ export default function App() {
     setActiveStep('result');
   };
 
-  // --- UI KOMPONENTEN ---
+  // Hilfskomponenten
   const HorizontalButton = ({ active, onClick, icon: Icon, label }) => (
     <button 
         onClick={onClick}
@@ -299,21 +284,19 @@ export default function App() {
   return (
     <div className="min-h-screen w-full bg-[#020617] text-slate-200 font-sans selection:bg-blue-600/40 overflow-x-hidden">
       
-      {/* Lightbox / Zoom */}
       {zoomedImage && (
         <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-6 animate-in fade-in" onClick={() => setZoomedImage(null)}>
           <button className="absolute top-8 right-8 text-white/50 hover:text-white p-2 bg-white/10 rounded-full transition-all"><X size={32}/></button>
-          <img src={zoomedImage} className="max-w-full max-h-full object-contain rounded-2xl border border-slate-800 shadow-2xl" alt="HD Preview" />
+          <img src={zoomedImage} className="max-w-full max-h-full object-contain rounded-2xl border border-slate-800 shadow-2xl" alt="Preview" />
         </div>
       )}
 
-      {/* Navigation Header */}
       <header className="sticky top-0 z-50 bg-[#020617]/95 backdrop-blur-xl border-b border-slate-800 p-5 px-6 md:px-10 flex justify-between items-center w-full shadow-2xl">
         <div className="flex items-center gap-6">
           {activeStep !== 'input' && <button onClick={() => setActiveStep('input')} className="p-3 bg-slate-800 rounded-full text-blue-400 hover:bg-slate-700 active:scale-95 transition-all"><RotateCcw size={20}/></button>}
           <div className="flex flex-col">
             <h1 className="text-sm font-black uppercase tracking-[0.4em] text-white italic">ELWIS LAB</h1>
-            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v30.0 | JAVASCRIPT MASTER</span>
+            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v31.0 | PURE JAVASCRIPT</span>
           </div>
         </div>
         <button onClick={() => setActiveStep('library')} className="p-4 bg-slate-800 rounded-2xl border border-slate-700 relative hover:bg-slate-700 transition-all">
@@ -324,7 +307,6 @@ export default function App() {
 
       <main className="max-w-6xl mx-auto p-4 md:p-10 w-full flex flex-col flex-1">
         
-        {/* === STEP 1: INPUT ENGINE CONFIGURATION === */}
         {activeStep === 'input' && (
           <div className="max-w-5xl mx-auto w-full space-y-12 animate-in slide-in-from-bottom-10 pt-10 flex-1 pb-40">
             <div className="text-center space-y-5">
@@ -334,7 +316,6 @@ export default function App() {
             
             <div className="bg-[#0F172A] p-8 md:p-12 rounded-[4rem] border border-slate-800 shadow-[0_40px_100px_-20px_rgba(0,0,0,1)] space-y-12">
                 
-                {/* Horizontal Menus */}
                 <div className="grid grid-cols-1 gap-10">
                     <div className="space-y-4">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] text-center border-b border-slate-800 pb-3">I. Business Segment</p>
@@ -363,7 +344,6 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* THE BLACK BOX INPUT */}
                 <div className="space-y-5 pt-10 border-t border-slate-800 relative z-0">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2 px-2">
                         <h3 className="text-[12px] font-black uppercase tracking-[0.4em] text-slate-400 italic">Strategic Input</h3>
@@ -371,7 +351,7 @@ export default function App() {
                     </div>
                     <textarea 
                         className="w-full h-56 p-10 bg-black border-2 border-slate-800 rounded-[3rem] outline-none text-2xl font-bold text-white placeholder:text-slate-700 focus:border-blue-600 transition-all shadow-inner focus:shadow-[0_0_50px_rgba(37,99,235,0.15)] leading-relaxed resize-none relative z-10" 
-                        placeholder="Z.B. Warum traditionelle CRMs im Mittelstand bei 100+ Mitarbeitern versagen..." 
+                        placeholder="Z.B. Warum traditionelle CRMs im Mittelstand versagen..." 
                         value={input} 
                         onChange={(e) => setInput(e.target.value)} 
                     />
@@ -384,7 +364,6 @@ export default function App() {
           </div>
         )}
 
-        {/* === STEP 2: COLUMBO NOIR === */}
         {activeStep === 'columbo' && (
           <div className="max-w-4xl mx-auto w-full animate-in zoom-in duration-700 flex-1 pb-32 pt-10">
             <div className="bg-[#0F172A] rounded-[5rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,1)] overflow-hidden relative border border-slate-800">
@@ -422,7 +401,6 @@ export default function App() {
           </div>
         )}
 
-        {/* === STEP 3: LOADING (BIG PROGRESS BAR) === */}
         {activeStep === 'generating' && (
           <div className="max-w-2xl mx-auto py-56 space-y-16 text-center animate-in fade-in flex-1">
             <div className="relative inline-flex items-center justify-center scale-[2] mb-16">
@@ -441,11 +419,9 @@ export default function App() {
           </div>
         )}
 
-        {/* === STEP 4: RESULTS === */}
         {activeStep === 'result' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 animate-in fade-in slide-in-from-bottom-10 pb-32 w-full pt-8">
             <div className="lg:col-span-7 space-y-10">
-              {/* Info Bar */}
               <div className="flex flex-col sm:flex-row gap-4 p-6 bg-[#0F172A] border border-slate-800 rounded-[2.5rem] items-center shadow-2xl">
                  <div className="flex flex-col flex-1 px-4 sm:border-r border-slate-700 w-full text-center sm:text-left"><span className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Segment</span><span className="text-sm text-white font-bold">{companySize}</span></div>
                  <div className="flex flex-col flex-1 px-4 sm:border-r border-slate-700 w-full text-center sm:text-left"><span className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Persona</span><span className="text-sm text-white font-bold">{persona}</span></div>
@@ -489,7 +465,6 @@ export default function App() {
           </div>
         )}
 
-        {/* === STEP 5: VAULT === */}
         {activeStep === 'library' && (
           <div className="space-y-16 animate-in slide-in-from-right-16 pb-32 px-4 w-full flex-1 flex flex-col pt-10">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 px-4 md:px-8 border-b border-slate-800 pb-10">
@@ -551,7 +526,7 @@ export default function App() {
           </div>
         )}
 
-        {/* --- GLOBAL ERROR ALERT --- */}
+        {/* ERROR OVERLAY */}
         {error && (
           <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-950 text-red-200 px-8 py-6 rounded-[2.5rem] shadow-[0_0_100px_rgba(220,38,38,0.5)] border-2 border-red-900 flex items-center gap-6 z-[200] max-w-[90vw] animate-in slide-in-from-bottom-6">
             <ShieldAlert size={32} className="text-red-500 flex-shrink-0" />
