@@ -15,6 +15,8 @@ export default function App() {
   const [persona, setPersona] = useState('Geschäftsführung');
   const [tone, setTone] = useState('Analytisch');
   const [input, setInput] = useState(''); 
+  
+  
   const apiKey = "AIzaSyBqfwA5lTbTMssaZmbVneKanhskuVC0TpY"; 
 
   const [columboData, setColumboData] = useState({ question: '', options: [] });
