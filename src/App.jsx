@@ -11,11 +11,8 @@ import {
 export default function App() {
   const [activeStep, setActiveStep] = useState('campaign_select'); 
   const [campaignType, setCampaignType] = useState(''); 
-  
-  // --- KEYS: HIER EINTRAGEN ---
-  // Achtung: Um die Kreditkarte 100% zu schützen, muss das nach dem Pitch ins Backend verlagert werden!
   const googleApiKey = "AIzaSyBqfwA5lTbTMssaZmbVneKanhskuVC0TpY"; 
-  const heliconeApiKey = ""; 
+  const heliconeApiKey = "sk-helicone-4vcwicy-cjpueoq-tiholma-fiycmji"; 
 
   const [targetCompany, setTargetCompany] = useState('');
   const [persona, setPersona] = useState('Geschäftsführung');
