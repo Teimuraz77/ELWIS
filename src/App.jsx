@@ -14,7 +14,7 @@ export default function App() {
   
   // --- KEYS: HIER EINTRAGEN ---
   // Achtung: Um die Kreditkarte 100% zu schützen, muss das nach dem Pitch ins Backend verlagert werden!
-  const googleApiKey = ""; 
+  const googleApiKey = "AIzaSyBqfwA5lTbTMssaZmbVneKanhskuVC0TpY"; 
   const heliconeApiKey = ""; 
 
   const [targetCompany, setTargetCompany] = useState('');
