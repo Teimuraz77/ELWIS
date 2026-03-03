@@ -12,6 +12,8 @@ import {
 export default function App() {
   const [activeStep, setActiveStep] = useState('campaign_select'); 
   const [campaignType, setCampaignType] = useState(''); 
+  
+  
   const apiKey = "AIzaSyCNZaqJ2fLAGyfSfEgJG7u7b4x9qC0mWV8"; 
 
   // --- EINGABE STATE ---
