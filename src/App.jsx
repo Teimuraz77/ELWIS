@@ -13,9 +13,7 @@ export default function App() {
   const [activeStep, setActiveStep] = useState('campaign_select'); 
   const [campaignType, setCampaignType] = useState(''); 
   
-  // --- GOOGLE API KEY: HIER DEINEN KEY EINTRAGEN ---
-  const apiKey = "AIzaSyCNZaqJ2fLAGyfSfEgJG7u7b4x9qC0mWV8
-"; 
+  const apiKey = "AIzaSyCNZaqJ2fLAGyfSfEgJG7u7b4x9qC0mWV8"; 
 
   // --- EINGABE STATE ---
   const [targetCompany, setTargetCompany] = useState('');
