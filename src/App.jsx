@@ -6,7 +6,7 @@ import {
   AlignCenter, AlignJustify, AlignLeft, ShieldCheck, Rocket, CalendarDays, 
   Clock, MessageCircle, Target, Briefcase, ShieldAlert, Library, Save, Trash2, ChevronRight,
   Building2, Globe2, Network, Lightbulb, Crosshair, Info, Edit3, Search, Link as LinkIcon, AlertTriangle,
-  Users, PhoneCall, Video, HelpCircle, MapPin, History, RefreshCcw, Phone, StickyNote
+  Users, PhoneCall, Video, HelpCircle, MapPin, History, RefreshCcw, Phone, StickyNote, Activity
 } from 'lucide-react';
 
 export default function App() {
@@ -30,7 +30,14 @@ export default function App() {
   const [groundingSources, setGroundingSources] = useState([]);
   const [selectedTopic, setSelectedTopic] = useState(null);
   
-  const [posts, setPosts] = useState({ pitch_direct: '', pitch_value: '', pitch_story: '', image: null, description: '' });
+  // Posts sind nun Objekte, um die Wahrscheinlichkeiten mit aufzunehmen
+  const [posts, setPosts] = useState({ 
+      pitch_direct: { text: '', chance: '', reason: '' }, 
+      pitch_value: { text: '', chance: '', reason: '' }, 
+      pitch_story: { text: '', chance: '', reason: '' }, 
+      image: null, 
+      description: '' 
+  });
   const [scheduleDate, setScheduleDate] = useState('');
   const [customImagePrompt, setCustomImagePrompt] = useState(''); 
   
@@ -193,7 +200,7 @@ export default function App() {
 
   const runContentEngine = async (topic) => {
     setSelectedTopic(topic);
-    setActiveStep('generating'); setProgress(10); setProgressLabel(`Synthetisiere Pitches für ${persona}...`); 
+    setActiveStep('generating'); setProgress(10); setProgressLabel(`Synthetisiere Pitches & Predictive Logic für ${persona}...`); 
     setLoadingItems({ pitch_direct: true, pitch_value: true, pitch_story: true, image: true });
     setLoading(true); setError(null);
 
@@ -220,23 +227,40 @@ export default function App() {
         "Call-to-Action: Eine provokante, offene Frage zur aktuellen IT-Architektur stellen.";
 
       const textPrompt = `WICHTIG: Du bist ein Top-B2B-Sales-Experte von ELWIS. Dein Ziel ist die Akquise VON "${targetCompany}". DU BIST NICHT DIE FIRMA "${targetCompany}"! Du pitchst AN sie.
-      Ziel-Persona: "${persona}". Tonfall: "${tone}". 
+      Ziel-Persona: "${persona}". Tonfall-Präferenz des Nutzers: "${tone}". 
       ${actionText}
       ${contextSetup}
       Nutze diese Quellen für Fakten: ${sourcesText}
 
-      Erzeuge 3 unterschiedliche, kurze bis mittellange Outreach-Pitches (LinkedIn/Cold Email Format):
-      1. "pitch_direct": Hard-Pitch. Direkt, auf den Punkt, fokussiert auf den Schmerz und die Lösung.
-      2. "pitch_value": Consultative-Pitch. Etwas weicher, fokussiert auf den geschäftlichen Mehrwert und die Sicherheit (IBM DNA).
-      3. "pitch_story": Narrative-Pitch. Greift die News/Historie stark auf und baut eine Brücke zu ELWIS.
-      4. "visual": Englische Beschreibung für eine abstrakte B2B-Vektorgrafik (KEINE echten Firmennamen/Logos!).
+      Erzeuge 3 unterschiedliche, kurze bis mittellange Outreach-Pitches (Cold Email Format):
+      1. "pitch_direct": Hard-Pitch. Direkt, auf den Punkt, fokussiert auf Schmerz und Lösung.
+      2. "pitch_value": Consultative-Pitch. Weicher, fokussiert auf Mehrwert und Sicherheit (IBM DNA).
+      3. "pitch_story": Narrative-Pitch. Greift News/Historie extrem stark auf und baut eine Story zu ELWIS.
       
-      JSON: {"pitch_direct": "...", "pitch_value": "...", "pitch_story": "...", "visual": "..."}. Deutsch.`;
+      ZUSATZAUFGABE (PREDICTIVE LOGIC):
+      Bewerte für JEDEN dieser 3 Pitches realistisch die Erfolgswahrscheinlichkeit (Chance in %) bei der gewählten Persona ("${persona}") unter Berücksichtigung der Ausgangslage. Gib zudem einen extrem kurzen Satz als Begründung (z.B. "C-Level liebt nackte Zahlen" oder "Zu verspielt für IT-Leads").
+      
+      5. "visual": Englische Beschreibung für eine abstrakte B2B-Vektorgrafik (KEINE echten Firmennamen/Logos!).
+      
+      JSON FORMAT: 
+      {
+        "pitch_direct": {"text": "...", "chance": "85%", "reason": "..."},
+        "pitch_value": {"text": "...", "chance": "60%", "reason": "..."},
+        "pitch_story": {"text": "...", "chance": "40%", "reason": "..."},
+        "visual": "..."
+      }
+      Sprache: Deutsch.`;
       
       const res = await apiCall({ contents: [{ parts: [{ text: textPrompt }] }], generationConfig: { responseMimeType: "application/json" } });
       const data = parseJSON(res.candidates[0].content.parts[0].text);
       if(data) {
-          setPosts({ pitch_direct: data.pitch_direct, pitch_value: data.pitch_value, pitch_story: data.pitch_story, description: data.visual, image: null });
+          setPosts({ 
+              pitch_direct: data.pitch_direct || {text: "Fehler", chance: "0%", reason: ""}, 
+              pitch_value: data.pitch_value || {text: "Fehler", chance: "0%", reason: ""}, 
+              pitch_story: data.pitch_story || {text: "Fehler", chance: "0%", reason: ""}, 
+              description: data.visual, 
+              image: null 
+          });
       }
 
       generateImage(data ? data.visual : "Corporate business transformation data, abstract shapes");
@@ -302,24 +326,47 @@ export default function App() {
     </button>
   );
 
-  const ContentCard = ({ title, text, type, icon: Icon, color }) => (
-    <div className="bg-[#0F172A] border border-slate-800 rounded-[2.5rem] p-6 md:p-8 relative flex flex-col h-full shadow-2xl transition-all hover:border-blue-500/40 group w-full min-w-0">
-      <div className={`absolute top-0 left-0 w-2 h-full ${color} rounded-l-[2.5rem]`}></div>
-      <div className="flex justify-between items-center mb-6 pl-4 border-b border-slate-800 pb-4">
-        <div className="flex items-center gap-3 min-w-0">
-            <Icon size={18} className="text-slate-400 flex-shrink-0" />
-            <span className="text-[11px] font-black uppercase tracking-widest text-slate-400 truncate">{title}</span>
+  // Angepasste ContentCard, die nun die Text/Chance/Reason Logik verarbeitet
+  const ContentCard = ({ title, pitchData, type, icon: Icon, color }) => {
+    const text = pitchData?.text || "Warte auf Engine...";
+    const chance = pitchData?.chance || "N/A";
+    const reason = pitchData?.reason || "";
+    
+    // Einfache Logik, um die Farbe basierend auf der %-Zahl anzupassen (wenn möglich)
+    const numChance = parseInt(chance.replace('%', '')) || 0;
+    const chanceColor = numChance > 70 ? 'text-green-400' : numChance > 40 ? 'text-amber-400' : 'text-red-400';
+
+    return (
+      <div className="bg-[#0F172A] border border-slate-800 rounded-[2.5rem] p-6 md:p-8 relative flex flex-col h-full shadow-2xl transition-all hover:border-blue-500/40 group w-full min-w-0">
+        <div className={`absolute top-0 left-0 w-2 h-full ${color} rounded-l-[2.5rem]`}></div>
+        <div className="flex justify-between items-center mb-4 pl-4 border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-3 min-w-0">
+              <Icon size={18} className="text-slate-400 flex-shrink-0" />
+              <span className="text-[11px] font-black uppercase tracking-widest text-slate-400 truncate">{title}</span>
+          </div>
+          <button onClick={() => {navigator.clipboard.writeText(text); setCopiedType(type); setTimeout(()=>setCopiedType(null), 2000)}} className="p-3 bg-slate-800 rounded-full hover:bg-slate-700 transition-all text-slate-300 flex-shrink-0">
+            {copiedType === type ? <Check size={18} className="text-green-400" /> : <Copy size={18} />}
+          </button>
         </div>
-        <button onClick={() => {navigator.clipboard.writeText(text); setCopiedType(type); setTimeout(()=>setCopiedType(null), 2000)}} className="p-3 bg-slate-800 rounded-full hover:bg-slate-700 transition-all text-slate-300 flex-shrink-0">
-          {copiedType === type ? <Check size={18} className="text-green-400" /> : <Copy size={18} />}
-        </button>
+
+        {/* NEU: PREDICTIVE LOGIC UI */}
+        {chance !== "N/A" && !loadingItems[type] && (
+            <div className="mb-4 pl-4 flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                    <Activity size={14} className={chanceColor} />
+                    <span className={`text-xs font-black uppercase tracking-widest ${chanceColor}`}>Win-Rate: {chance}</span>
+                </div>
+                <span className="text-[10px] text-slate-500 italic opacity-80">{reason}</span>
+            </div>
+        )}
+
+        <div className="bg-black/50 p-6 rounded-3xl border border-slate-800 flex-1 overflow-y-auto relative ml-4 min-h-[150px]">
+          {loadingItems[type] && <div className="absolute inset-0 bg-[#0F172A]/90 flex items-center justify-center z-10 rounded-3xl"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}
+          <p className="text-slate-200 leading-relaxed whitespace-pre-wrap break-words text-sm">{text}</p>
+        </div>
       </div>
-      <div className="bg-black/50 p-6 rounded-3xl border border-slate-800 flex-1 overflow-y-auto relative ml-4 min-h-[150px]">
-        {loadingItems[type] && <div className="absolute inset-0 bg-[#0F172A]/90 flex items-center justify-center z-10 rounded-3xl"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}
-        <p className="text-slate-200 leading-relaxed whitespace-pre-wrap break-words text-sm">{text || "Warte auf Engine..."}</p>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen w-full bg-[#020617] text-slate-200 font-sans selection:bg-blue-600/40 overflow-x-hidden">
@@ -336,7 +383,7 @@ export default function App() {
           {activeStep !== 'campaign_select' && <button onClick={resetEngine} className="p-3 bg-slate-800 rounded-full text-blue-400 hover:bg-slate-700 active:scale-95 transition-all"><RotateCcw size={20}/></button>}
           <div className="flex flex-col">
             <h1 className="text-sm font-black uppercase tracking-[0.4em] text-white italic">ELWIS LAB</h1>
-            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v43.0 | STREAMLINED FLOW</span>
+            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v44.0 | PREDICTIVE ENGINE</span>
           </div>
         </div>
         <button onClick={() => setActiveStep('library')} className="p-4 bg-slate-800 rounded-2xl border border-slate-700 relative hover:bg-slate-700 transition-all">
@@ -377,7 +424,7 @@ export default function App() {
           </div>
         )}
 
-        {/* === STEP 1A: COLD OUTREACH INPUT (Neuer Flow) === */}
+        {/* === STEP 1A: COLD OUTREACH INPUT === */}
         {activeStep === 'input_cold' && (
           <div className="max-w-4xl mx-auto w-full space-y-12 animate-in slide-in-from-right-10 pt-10 flex-1 pb-40">
             <div className="text-center space-y-5">
@@ -388,7 +435,6 @@ export default function App() {
             <div className="bg-[#0F172A] p-6 md:p-12 rounded-[3rem] md:rounded-[4rem] border border-slate-800 shadow-2xl space-y-12 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full blur-[100px]"></div>
                 
-                {/* 1. Personenkreis */}
                 <div className="space-y-4 relative z-10">
                     <p className="text-[10px] md:text-[12px] font-black text-slate-500 uppercase tracking-[0.4em] pl-4">1) Personenkreis</p>
                     <div className="flex flex-col sm:flex-row gap-4 w-full">
@@ -398,7 +444,6 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* 2. Unternehmen / Industrie */}
                 <div className="space-y-4 relative z-10">
                     <label className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-500 block pl-4">2) Unternehmen / Industrie</label>
                     <div className="relative">
@@ -407,9 +452,8 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* 3. Tonfall (Optional, aber wichtig für Quali) */}
                 <div className="space-y-4 relative z-10 pt-4 border-t border-slate-800">
-                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] pl-4">Tonfall Einstellung (Optional)</p>
+                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] pl-4">Tonfall (Wichtig für KI-Schätzung)</p>
                     <div className="flex flex-col sm:flex-row gap-4 w-full">
                         <HorizontalButton active={tone === 'Analytisch'} onClick={() => setTone('Analytisch')} icon={BarChart3} label="Analytisch" />
                         <HorizontalButton active={tone === 'Visionär'} onClick={() => setTone('Visionär')} icon={Lightbulb} label="Visionär" />
@@ -424,7 +468,7 @@ export default function App() {
           </div>
         )}
 
-        {/* === STEP 1B: WARM OUTREACH INPUT (Neuer Flow) === */}
+        {/* === STEP 1B: WARM OUTREACH INPUT === */}
         {activeStep === 'input_warm' && (
           <div className="max-w-4xl mx-auto w-full space-y-12 animate-in slide-in-from-left-10 pt-10 flex-1 pb-40">
             <div className="text-center space-y-5">
@@ -435,7 +479,6 @@ export default function App() {
             <div className="bg-[#0F172A] p-6 md:p-12 rounded-[3rem] md:rounded-[4rem] border border-slate-800 shadow-2xl space-y-10 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600/5 rounded-full blur-[100px]"></div>
                 
-                {/* 1. Personenkreis */}
                 <div className="space-y-4 relative z-10">
                     <p className="text-[10px] md:text-[12px] font-black text-slate-500 uppercase tracking-[0.4em] pl-4">1) Personenkreis</p>
                     <div className="flex flex-col sm:flex-row gap-4 w-full">
@@ -445,7 +488,6 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* 2. Unternehmen / Industrie */}
                 <div className="space-y-4 relative z-10">
                     <label className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-500 block pl-4">2) Unternehmen / Industrie</label>
                     <div className="relative">
@@ -454,7 +496,6 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* 3. SECRET SAUCE DATA (UNVERZICHTBAR FÜR WARM OUTREACH!) */}
                 <div className="pt-8 border-t border-slate-800 relative z-10 space-y-8">
                     <div className="space-y-4">
                         <p className="text-[10px] font-black text-purple-400 uppercase tracking-[0.5em] pl-4 flex items-center gap-2"><AlertTriangle size={14}/> Zwingend für die Reaktivierung</p>
@@ -486,7 +527,7 @@ export default function App() {
           </div>
         )}
 
-        {/* === STEP 2: DOSSIER & TOPIC SELECTION (DIE 3 THEMEN) === */}
+        {/* === STEP 2: DOSSIER & TOPIC SELECTION === */}
         {activeStep === 'topic_selection' && (
           <div className="w-full animate-in zoom-in duration-500 flex-1 pb-32 pt-4 flex flex-col lg:flex-row gap-8">
             
@@ -525,7 +566,7 @@ export default function App() {
                 </div>
             </div>
 
-            {/* SPALTE RECHTS: ANGRIFFSVORSCHLÄGE (DIE 3 THEMEN) */}
+            {/* SPALTE RECHTS: ANGRIFFSVORSCHLÄGE */}
             <div className="w-full lg:w-2/3 flex flex-col gap-6">
                 <div className="mb-4 space-y-2">
                     <h2 className={`text-2xl md:text-3xl font-black text-white italic tracking-tighter uppercase border-l-8 pl-6 ${campaignType === 'warm' ? 'border-purple-600' : 'border-blue-600'}`}>
@@ -599,10 +640,10 @@ export default function App() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-                 <ContentCard title="Hard Pitch (Direkt)" text={posts.pitch_direct} type="pitch_direct" icon={Crosshair} color="bg-red-500" />
-                 <ContentCard title="Value Pitch (Mehrwert)" text={posts.pitch_value} type="pitch_value" icon={BarChart3} color="bg-blue-500" />
+                 <ContentCard title="Hard Pitch (Direkt)" pitchData={posts.pitch_direct} type="pitch_direct" icon={Crosshair} color="bg-red-500" />
+                 <ContentCard title="Value Pitch (Mehrwert)" pitchData={posts.pitch_value} type="pitch_value" icon={BarChart3} color="bg-blue-500" />
               </div>
-              <ContentCard title="Narrative Pitch (Story/News)" text={posts.pitch_story} type="pitch_story" icon={AlignJustify} color="bg-purple-500" />
+              <ContentCard title="Narrative Pitch (Story/News)" pitchData={posts.pitch_story} type="pitch_story" icon={AlignJustify} color="bg-purple-500" />
             </div>
             
             {/* RECHTE SPALTE: DOSSIER RECAP & SPEICHERN */}
@@ -622,7 +663,7 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* DAS BILD (Optional/Generisch) */}
+                {/* DAS BILD */}
                 <div className="flex justify-between items-center mb-4 px-2">
                     <span className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-400">Brand Visual</span>
                 </div>
