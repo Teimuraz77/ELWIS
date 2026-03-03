@@ -13,7 +13,8 @@ export default function App() {
   const [activeStep, setActiveStep] = useState('campaign_select'); 
   const [campaignType, setCampaignType] = useState(''); 
   
-  const apiKey = "AIzaSyCNZaqJ2fLAGyfSfEgJG7u7b4x9qC0mWV8"; 
+  // --- GOOGLE API KEY: HIER DEINEN KEY EINTRAGEN ---
+  const apiKey = ""; 
 
   // --- EINGABE STATE ---
   const [targetCompany, setTargetCompany] = useState('');
@@ -30,7 +31,6 @@ export default function App() {
   const [groundingSources, setGroundingSources] = useState([]);
   const [selectedTopic, setSelectedTopic] = useState(null);
   
-  // Wir ersetzen die alten Längen durch spezifische Pitches
   const [posts, setPosts] = useState({ pitch_direct: '', pitch_value: '', pitch_story: '', image: null, description: '' });
   const [scheduleDate, setScheduleDate] = useState('');
   const [customImagePrompt, setCustomImagePrompt] = useState(''); 
@@ -45,12 +45,10 @@ export default function App() {
   const [zoomedImage, setZoomedImage] = useState(null);
   const [copiedType, setCopiedType] = useState(null);
 
-  // Sync des generierten Prompts in das editierbare Feld
   useEffect(() => {
     if (posts.description) setCustomImagePrompt(posts.description);
   }, [posts.description]);
 
-  // Ladebalken Animation
   useEffect(() => {
     let interval;
     if (loading && progress < 98) {
@@ -74,7 +72,6 @@ export default function App() {
     setActiveStep('campaign_select');
   };
 
-  // --- KUGELSICHERER API CALL ---
   const apiCall = async (payload, useSearch = false) => {
     if (!apiKey) throw new Error("API-Schlüssel fehlt! Bitte im Code eintragen.");
     
@@ -137,10 +134,9 @@ export default function App() {
     } catch (e) { return false; }
   };
 
-  // --- RECHERCHE (DOSSIER + ANGRIFFSVEKTOREN) ---
   const startResearch = async () => {
-    if (!targetCompany.trim()) { setError("Bitte Unternehmen oder Industrie eingeben."); return; }
-    if (campaignType === 'warm' && !warmContext.trim()) { setError("Bitte den Kontext angeben."); return; }
+    if (!targetCompany.trim()) { setError("Bitte Unternehmen oder Industrie hinzufügen."); return; }
+    if (campaignType === 'warm' && !warmContext.trim()) { setError("Bitte den Grund der Reaktivierung (Kontext) angeben."); return; }
     
     setActiveStep('generating');
     setLoading(true); setProgress(5); setProgressLabel(`Scanne globale News & Impressum für ${targetCompany}...`); setError(null);
@@ -148,14 +144,14 @@ export default function App() {
     try {
         const isQuatsch = await checkRelevance(targetCompany);
         if (isQuatsch) {
-            setError("Nonsense erkannt. Bitte seriöses Unternehmen eingeben.");
+            setError("Nonsense erkannt. Bitte seriöses Unternehmen/Industrie eingeben.");
             setLoading(false); setProgress(0); 
             setActiveStep(campaignType === 'warm' ? 'input_warm' : 'input_cold'); 
             return;
         }
 
-        const prompt = `Du bist ein B2B Lead-Research Analyst. Führe eine Websuche für das Unternehmen "${targetCompany}" durch.
-        Aufgabe 1: Finde die offizielle Adresse (Headquarter) und die zentrale Telefonnummer aus dem Impressum oder offiziellen Einträgen.
+        const prompt = `Du bist ein B2B Lead-Research Analyst. Führe eine Websuche für das Unternehmen oder die Industrie "${targetCompany}" durch.
+        Aufgabe 1: Finde die offizielle Adresse (Headquarter) und die zentrale Telefonnummer aus dem Impressum. (Bei Industrien gib "N/A" aus).
         Aufgabe 2: Entwickle 3 hochaktuelle strategische Aufhänger (Angriffsvorschläge) für einen Pitch an ${persona}.
         
         REGEL: Antworte AUSSCHLIESSLICH mit rohem, gültigen JSON. Kein Markdown!
@@ -196,7 +192,6 @@ export default function App() {
     finally { setLoading(false); setProgress(0); }
   };
 
-  // --- CONTENT ENGINE (DIE 3 PITCHES) ---
   const runContentEngine = async (topic) => {
     setSelectedTopic(topic);
     setActiveStep('generating'); setProgress(10); setProgressLabel(`Synthetisiere Pitches für ${persona}...`); 
@@ -342,7 +337,7 @@ export default function App() {
           {activeStep !== 'campaign_select' && <button onClick={resetEngine} className="p-3 bg-slate-800 rounded-full text-blue-400 hover:bg-slate-700 active:scale-95 transition-all"><RotateCcw size={20}/></button>}
           <div className="flex flex-col">
             <h1 className="text-sm font-black uppercase tracking-[0.4em] text-white italic">ELWIS LAB</h1>
-            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v42.0 | INTELLIGENCE ENGINE</span>
+            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v43.0 | STREAMLINED FLOW</span>
           </div>
         </div>
         <button onClick={() => setActiveStep('library')} className="p-4 bg-slate-800 rounded-2xl border border-slate-700 relative hover:bg-slate-700 transition-all">
@@ -366,8 +361,8 @@ export default function App() {
                     <div className="absolute -right-10 -top-10 bg-blue-600/10 w-64 h-64 rounded-full blur-[80px] group-hover:bg-blue-600/20 transition-all"></div>
                     <div className="p-8 bg-black/50 rounded-full border-2 border-slate-800 group-hover:scale-110 transition-transform"><Search size={64} className="text-blue-500" /></div>
                     <div>
-                        <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight mb-4">Kaltakquise</h3>
-                        <p className="text-slate-400 text-xs md:text-sm leading-relaxed">Die KI führt eine Live-Recherche zum Unternehmen durch, zieht die Impressumsdaten und generiert hochrelevante Eisbrecher basierend auf aktuellen News.</p>
+                        <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight mb-4">1) Kaltakquise</h3>
+                        <p className="text-slate-400 text-xs md:text-sm leading-relaxed">Identifiziere neue Ziele. Die KI führt eine Live-Recherche durch, zieht Impressumsdaten und generiert News-basierte Eisbrecher.</p>
                     </div>
                 </div>
 
@@ -375,138 +370,124 @@ export default function App() {
                     <div className="absolute -left-10 -bottom-10 bg-purple-600/10 w-64 h-64 rounded-full blur-[80px] group-hover:bg-purple-600/20 transition-all"></div>
                     <div className="p-8 bg-black/50 rounded-full border-2 border-slate-800 group-hover:scale-110 transition-transform"><Users size={64} className="text-purple-500" /></div>
                     <div>
-                        <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight mb-4">Bestandskontakte</h3>
-                        <p className="text-slate-400 text-xs md:text-sm leading-relaxed">Aktiviere alte Leads neu. Verbinde die Historie (Messe, Lost Deal) intelligent mit tagesaktuellen News des Unternehmens.</p>
+                        <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight mb-4">2) Reaktivierung</h3>
+                        <p className="text-slate-400 text-xs md:text-sm leading-relaxed">Aktiviere Bestandskontakte. Verbinde die Historie (Messe, Lost Deal) intelligent mit tagesaktuellen News.</p>
                     </div>
                 </div>
             </div>
           </div>
         )}
 
-        {/* === STEP 1A: COLD OUTREACH INPUT === */}
+        {/* === STEP 1A: COLD OUTREACH INPUT (Neuer Flow) === */}
         {activeStep === 'input_cold' && (
           <div className="max-w-4xl mx-auto w-full space-y-12 animate-in slide-in-from-right-10 pt-10 flex-1 pb-40">
             <div className="text-center space-y-5">
-                <div className="inline-flex items-center gap-3 bg-blue-900/30 text-blue-400 px-6 py-2 rounded-full border border-blue-500/30 mb-2"><Search size={16} /> <span className="text-[11px] font-black uppercase tracking-[0.3em] italic">Intelligence Module</span></div>
+                <div className="inline-flex items-center gap-3 bg-blue-900/30 text-blue-400 px-6 py-2 rounded-full border border-blue-500/30 mb-2"><Search size={16} /> <span className="text-[11px] font-black uppercase tracking-[0.3em] italic">Intelligence Module: Kaltakquise</span></div>
                 <h2 className="text-5xl md:text-7xl font-black text-white leading-none tracking-tighter uppercase italic text-center">Target Lock.</h2>
             </div>
             
             <div className="bg-[#0F172A] p-6 md:p-12 rounded-[3rem] md:rounded-[4rem] border border-slate-800 shadow-2xl space-y-12 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full blur-[100px]"></div>
                 
-                <div className="space-y-5 relative z-10">
-                    <label className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-400 italic block pl-4">I. Ziel-Unternehmen</label>
+                {/* 1. Personenkreis */}
+                <div className="space-y-4 relative z-10">
+                    <p className="text-[10px] md:text-[12px] font-black text-slate-500 uppercase tracking-[0.4em] pl-4">1) Personenkreis</p>
+                    <div className="flex flex-col sm:flex-row gap-4 w-full">
+                        <HorizontalButton active={persona === 'Geschäftsführung'} onClick={() => setPersona('Geschäftsführung')} icon={Briefcase} label="C-Level" />
+                        <HorizontalButton active={persona === 'Tech Lead'} onClick={() => setPersona('Tech Lead')} icon={Network} label="Tech Lead" />
+                        <HorizontalButton active={persona === 'Betriebsleiter'} onClick={() => setPersona('Betriebsleiter')} icon={Target} label="Ops Manager" />
+                    </div>
+                </div>
+
+                {/* 2. Unternehmen / Industrie */}
+                <div className="space-y-4 relative z-10">
+                    <label className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-500 block pl-4">2) Unternehmen / Industrie</label>
                     <div className="relative">
                         <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={24} />
-                        <input type="text" className="w-full p-6 md:p-8 pl-16 bg-black border-2 border-slate-800 rounded-[2.5rem] outline-none text-xl md:text-3xl font-black text-white placeholder:text-slate-800 focus:border-blue-600 transition-all shadow-inner uppercase tracking-wide" placeholder="Z.B. SIEMENS oder ZALANDO" value={targetCompany} onChange={(e) => setTargetCompany(e.target.value)} />
+                        <input type="text" className="w-full p-6 md:p-8 pl-16 bg-black border-2 border-slate-800 rounded-[2.5rem] outline-none text-xl md:text-2xl font-black text-white placeholder:text-slate-700 focus:border-blue-600 transition-all shadow-inner uppercase tracking-wide" placeholder="Bitte Unternehmen oder Industrie hinzufügen..." value={targetCompany} onChange={(e) => setTargetCompany(e.target.value)} />
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-10 relative z-10">
-                    <div className="space-y-4">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] pl-4">II. Ansprechpartner (Persona)</p>
-                        <div className="flex flex-col sm:flex-row gap-4 w-full">
-                            <HorizontalButton active={persona === 'Geschäftsführung'} onClick={() => setPersona('Geschäftsführung')} icon={Briefcase} label="C-Level" />
-                            <HorizontalButton active={persona === 'Tech Lead'} onClick={() => setPersona('Tech Lead')} icon={Network} label="Tech Lead" />
-                            <HorizontalButton active={persona === 'Betriebsleiter'} onClick={() => setPersona('Betriebsleiter')} icon={Target} label="Ops Manager" />
-                        </div>
-                    </div>
-                    <div className="space-y-4">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] pl-4">III. Tonfall</p>
-                        <div className="flex flex-col sm:flex-row gap-4 w-full">
-                            <HorizontalButton active={tone === 'Analytisch'} onClick={() => setTone('Analytisch')} icon={BarChart3} label="Analytisch" />
-                            <HorizontalButton active={tone === 'Visionär'} onClick={() => setTone('Visionär')} icon={Lightbulb} label="Visionär" />
-                            <HorizontalButton active={tone === 'Direkt'} onClick={() => setTone('Direkt')} icon={Crosshair} label="Knallhart" />
-                        </div>
+                {/* 3. Tonfall (Optional, aber wichtig für Quali) */}
+                <div className="space-y-4 relative z-10 pt-4 border-t border-slate-800">
+                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] pl-4">Tonfall Einstellung (Optional)</p>
+                    <div className="flex flex-col sm:flex-row gap-4 w-full">
+                        <HorizontalButton active={tone === 'Analytisch'} onClick={() => setTone('Analytisch')} icon={BarChart3} label="Analytisch" />
+                        <HorizontalButton active={tone === 'Visionär'} onClick={() => setTone('Visionär')} icon={Lightbulb} label="Visionär" />
+                        <HorizontalButton active={tone === 'Direkt'} onClick={() => setTone('Direkt')} icon={Crosshair} label="Knallhart" />
                     </div>
                 </div>
 
-                <button onClick={startResearch} disabled={loading || !targetCompany.trim()} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-8 md:py-10 rounded-[3.5rem] font-black text-xs md:text-sm uppercase tracking-[0.4em] md:tracking-[0.6em] shadow-[0_20px_50px_-10px_rgba(37,99,235,0.5)] flex items-center justify-center gap-4 md:gap-6 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none relative z-20 mt-8">
-                  {loading ? <Loader2 className="animate-spin" size={28} /> : <Search size={28} />} LIVE-RECHERCHE STARTEN
+                <button onClick={startResearch} disabled={loading || !targetCompany.trim()} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-8 md:py-10 rounded-[3.5rem] font-black text-sm md:text-lg uppercase tracking-[0.4em] shadow-[0_20px_50px_-10px_rgba(37,99,235,0.5)] flex items-center justify-center gap-4 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none relative z-20 mt-8">
+                  {loading ? <Loader2 className="animate-spin" size={28} /> : <Zap size={28} />} LET'S GO !
                 </button>
             </div>
-            <div className="flex items-center justify-center gap-2 mt-6 text-slate-600 text-xs font-bold uppercase tracking-widest"><CheckCircle2 size={14}/> Google Grounding & Scraper Aktiviert</div>
           </div>
         )}
 
-        {/* === STEP 1B: WARM OUTREACH INPUT === */}
+        {/* === STEP 1B: WARM OUTREACH INPUT (Neuer Flow) === */}
         {activeStep === 'input_warm' && (
           <div className="max-w-4xl mx-auto w-full space-y-12 animate-in slide-in-from-left-10 pt-10 flex-1 pb-40">
             <div className="text-center space-y-5">
-                <div className="inline-flex items-center gap-3 bg-purple-900/30 text-purple-400 px-6 py-2 rounded-full border border-purple-500/30 mb-2"><Users size={16} /> <span className="text-[11px] font-black uppercase tracking-[0.3em] italic">Warm Outreach Module</span></div>
+                <div className="inline-flex items-center gap-3 bg-purple-900/30 text-purple-400 px-6 py-2 rounded-full border border-purple-500/30 mb-2"><Users size={16} /> <span className="text-[11px] font-black uppercase tracking-[0.3em] italic">Intelligence Module: Reaktivierung</span></div>
                 <h2 className="text-5xl md:text-7xl font-black text-white leading-none tracking-tighter uppercase italic text-center">Re-Engagement.</h2>
             </div>
             
-            <div className="bg-[#0F172A] p-6 md:p-12 rounded-[3rem] md:rounded-[4rem] border border-slate-800 shadow-2xl space-y-12 relative overflow-hidden">
+            <div className="bg-[#0F172A] p-6 md:p-12 rounded-[3rem] md:rounded-[4rem] border border-slate-800 shadow-2xl space-y-10 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600/5 rounded-full blur-[100px]"></div>
                 
-                <div className="space-y-4 relative z-10 border-b border-slate-800 pb-10">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] pl-4 mb-4">I. Typ des Bestandskontakts</p>
-                    <div className="flex flex-col md:flex-row gap-4 w-full">
-                        <HorizontalButton active={warmType === 'event'} onClick={() => setWarmType('event')} icon={MapPin} label="Messe / Event" />
-                        <HorizontalButton active={warmType === 'lost_deal'} onClick={() => setWarmType('lost_deal')} icon={History} label="Lost Opportunity" />
-                        <HorizontalButton active={warmType === 'old_contact'} onClick={() => setWarmType('old_contact')} icon={RefreshCcw} label="Alter Kontakt" />
+                {/* 1. Personenkreis */}
+                <div className="space-y-4 relative z-10">
+                    <p className="text-[10px] md:text-[12px] font-black text-slate-500 uppercase tracking-[0.4em] pl-4">1) Personenkreis</p>
+                    <div className="flex flex-col sm:flex-row gap-4 w-full">
+                        <HorizontalButton active={persona === 'Geschäftsführung'} onClick={() => setPersona('Geschäftsführung')} icon={Briefcase} label="C-Level" />
+                        <HorizontalButton active={persona === 'Tech Lead'} onClick={() => setPersona('Tech Lead')} icon={Network} label="Tech Lead" />
+                        <HorizontalButton active={persona === 'Betriebsleiter'} onClick={() => setPersona('Betriebsleiter')} icon={Target} label="Ops Manager" />
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-                    <div className="space-y-4">
-                        <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 italic block pl-4">Firmenname</label>
-                        <div className="relative">
-                            <Building2 className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                            <input type="text" className="w-full p-6 pl-14 bg-black border-2 border-slate-800 rounded-3xl outline-none text-xl font-bold text-white placeholder:text-slate-800 focus:border-purple-600 transition-all shadow-inner" placeholder="Z.B. SIEMENS" value={targetCompany} onChange={(e) => setTargetCompany(e.target.value)} />
-                        </div>
-                    </div>
-                    <div className="space-y-4">
-                        <label className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 italic block pl-4">
-                            {warmType === 'event' && "Welches Event / Messe?"}
-                            {warmType === 'lost_deal' && "Warum ging der Deal verloren?"}
-                            {warmType === 'old_contact' && "Kontext / Letzter Kontakt?"}
-                        </label>
-                        <div className="relative">
-                            {warmType === 'event' && <MapPin className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500" size={20} />}
-                            {warmType === 'lost_deal' && <History className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500" size={20} />}
-                            {warmType === 'old_contact' && <RefreshCcw className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500" size={20} />}
-                            
-                            <input type="text" className="w-full p-6 pl-14 bg-black border-2 border-slate-800 rounded-3xl outline-none text-xl font-bold text-white placeholder:text-slate-800 focus:border-purple-600 transition-all shadow-inner" 
-                                placeholder={
-                                    warmType === 'event' ? "Z.B. OMR 2026, DMEXCO..." : 
-                                    warmType === 'lost_deal' ? "Z.B. War damals zu teuer..." : 
-                                    "Z.B. Vor 2 Jahren bei Projekt X..."
-                                } 
-                                value={warmContext} onChange={(e) => setWarmContext(e.target.value)} 
-                            />
-                        </div>
+                {/* 2. Unternehmen / Industrie */}
+                <div className="space-y-4 relative z-10">
+                    <label className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-500 block pl-4">2) Unternehmen / Industrie</label>
+                    <div className="relative">
+                        <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={24} />
+                        <input type="text" className="w-full p-6 md:p-8 pl-16 bg-black border-2 border-slate-800 rounded-[2.5rem] outline-none text-xl md:text-2xl font-black text-white placeholder:text-slate-700 focus:border-purple-600 transition-all shadow-inner uppercase tracking-wide" placeholder="Bitte Unternehmen oder Industrie hinzufügen..." value={targetCompany} onChange={(e) => setTargetCompany(e.target.value)} />
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-10 relative z-10 border-t border-slate-800 pt-10">
+                {/* 3. SECRET SAUCE DATA (UNVERZICHTBAR FÜR WARM OUTREACH!) */}
+                <div className="pt-8 border-t border-slate-800 relative z-10 space-y-8">
                     <div className="space-y-4">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] pl-4">Call-To-Action (Nächster Schritt)</p>
-                        <div className="flex flex-col sm:flex-row gap-4 w-full">
-                            <HorizontalButton active={followUpAction === 'Telefonat'} onClick={() => setFollowUpAction('Telefonat')} icon={PhoneCall} label="Kurzes Telefonat" />
-                            <HorizontalButton active={followUpAction === 'Video'} onClick={() => setFollowUpAction('Video')} icon={Video} label="Videokonferenz" />
-                            <HorizontalButton active={followUpAction === 'Frage'} onClick={() => setFollowUpAction('Frage')} icon={HelpCircle} label="Offene Frage" />
+                        <p className="text-[10px] font-black text-purple-400 uppercase tracking-[0.5em] pl-4 flex items-center gap-2"><AlertTriangle size={14}/> Zwingend für die Reaktivierung</p>
+                        <div className="flex flex-col md:flex-row gap-4 w-full">
+                            <HorizontalButton active={warmType === 'event'} onClick={() => setWarmType('event')} icon={MapPin} label="Messe / Event" />
+                            <HorizontalButton active={warmType === 'lost_deal'} onClick={() => setWarmType('lost_deal')} icon={History} label="Lost Opportunity" />
+                            <HorizontalButton active={warmType === 'old_contact'} onClick={() => setWarmType('old_contact')} icon={RefreshCcw} label="Alter Kontakt" />
                         </div>
                     </div>
-
-                    <div className="space-y-4">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] pl-4">Ziel-Persona</p>
-                        <div className="flex flex-col sm:flex-row gap-4 w-full">
-                            <HorizontalButton active={persona === 'Geschäftsführung'} onClick={() => setPersona('Geschäftsführung')} icon={Briefcase} label="C-Level" />
-                            <HorizontalButton active={persona === 'Tech Lead'} onClick={() => setPersona('Tech Lead')} icon={Network} label="Tech Lead" />
-                            <HorizontalButton active={persona === 'Betriebsleiter'} onClick={() => setPersona('Betriebsleiter')} icon={Target} label="Operator" />
-                        </div>
+                    <div className="relative">
+                        {warmType === 'event' && <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={20} />}
+                        {warmType === 'lost_deal' && <History className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={20} />}
+                        {warmType === 'old_contact' && <RefreshCcw className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={20} />}
+                        <input type="text" className="w-full p-6 pl-14 bg-black border-2 border-slate-800 rounded-3xl outline-none text-lg font-bold text-white placeholder:text-slate-700 focus:border-purple-600 transition-all shadow-inner" 
+                            placeholder={
+                                warmType === 'event' ? "Welche Messe? Z.B. OMR 2026..." : 
+                                warmType === 'lost_deal' ? "Warum verloren? Z.B. Budget..." : 
+                                "Kontext? Z.B. Projekt X vor 2 Jahren..."
+                            } 
+                            value={warmContext} onChange={(e) => setWarmContext(e.target.value)} 
+                        />
                     </div>
                 </div>
 
-                <button onClick={startResearch} disabled={loading || !targetCompany.trim() || !warmContext.trim()} className="w-full bg-purple-600 hover:bg-purple-500 text-white py-8 md:py-10 rounded-[3.5rem] font-black text-xs md:text-sm uppercase tracking-[0.4em] md:tracking-[0.6em] shadow-[0_20px_50px_-10px_rgba(147,51,234,0.5)] flex items-center justify-center gap-4 md:gap-6 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none relative z-20 mt-8">
-                  {loading ? <Loader2 className="animate-spin" size={28} /> : <Search size={28} />} LIVE-RECHERCHE STARTEN
+                <button onClick={startResearch} disabled={loading || !targetCompany.trim() || !warmContext.trim()} className="w-full bg-purple-600 hover:bg-purple-500 text-white py-8 md:py-10 rounded-[3.5rem] font-black text-sm md:text-lg uppercase tracking-[0.4em] shadow-[0_20px_50px_-10px_rgba(147,51,234,0.5)] flex items-center justify-center gap-4 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none relative z-20 mt-8">
+                  {loading ? <Loader2 className="animate-spin" size={28} /> : <Zap size={28} />} LET'S GO !
                 </button>
             </div>
+          </div>
         )}
 
-        {/* === STEP 2: DOSSIER & TOPIC SELECTION (DIE SECRET SAUCE) === */}
+        {/* === STEP 2: DOSSIER & TOPIC SELECTION (DIE 3 THEMEN) === */}
         {activeStep === 'topic_selection' && (
           <div className="w-full animate-in zoom-in duration-500 flex-1 pb-32 pt-4 flex flex-col lg:flex-row gap-8">
             
@@ -545,13 +526,13 @@ export default function App() {
                 </div>
             </div>
 
-            {/* SPALTE RECHTS: ANGRIFFSVORSCHLÄGE */}
+            {/* SPALTE RECHTS: ANGRIFFSVORSCHLÄGE (DIE 3 THEMEN) */}
             <div className="w-full lg:w-2/3 flex flex-col gap-6">
                 <div className="mb-4 space-y-2">
                     <h2 className={`text-2xl md:text-3xl font-black text-white italic tracking-tighter uppercase border-l-8 pl-6 ${campaignType === 'warm' ? 'border-purple-600' : 'border-blue-600'}`}>
-                        Die Secret Sauce: Angriffsvorschläge
+                        Aktuelle Themen für den Angriff
                     </h2>
-                    <p className="text-slate-400 pl-8 text-sm">Wähle den besten aktuellen News-Aufhänger, um die Pitch-Matrix zu generieren.</p>
+                    <p className="text-slate-400 pl-8 text-sm">Wähle eines dieser 3 aktuellen News-Themen aus der Recherche, um die Pitch-Matrix zu generieren.</p>
                 </div>
 
                 <div className="grid gap-5">
