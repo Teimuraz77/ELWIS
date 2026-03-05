@@ -6,31 +6,30 @@ import {
   AlignCenter, AlignJustify, AlignLeft, ShieldCheck, Rocket, CalendarDays, 
   Clock, MessageCircle, Target, Briefcase, ShieldAlert, Library, Save, Trash2, ChevronRight,
   Building2, Globe2, Network, Lightbulb, Crosshair, Info, Edit3, Search, Link as LinkIcon, AlertTriangle,
-  Users, PhoneCall, Video, HelpCircle, MapPin, History, RefreshCcw, Phone, StickyNote, Activity
+  Users, PhoneCall, Video, HelpCircle, MapPin, History, RefreshCcw, Phone, StickyNote, Activity, Database, FolderOpen
 } from 'lucide-react';
 
 export default function App() {
-  const [activeStep, setActiveStep] = useState('campaign_select'); 
-  const [campaignType, setCampaignType] = useState(''); 
+  // --- KERN-ZUSTAND ---
+  const [activeStep, setActiveStep] = useState('input'); 
   
-  const apiKey = "AIzaSyCNZaqJ2fLAGyfSfEgJG7u7b4x9qC0mWV8"; 
-
-  // --- EINGABE STATE ---
-  const [targetCompany, setTargetCompany] = useState('');
+  // Konfiguration
+  const [companySize, setCompanySize] = useState('Mittelstand');
   const [persona, setPersona] = useState('Geschäftsführung');
   const [tone, setTone] = useState('Analytisch');
-  
-  const [warmType, setWarmType] = useState('event'); 
-  const [warmContext, setWarmContext] = useState(''); 
-  const [followUpAction, setFollowUpAction] = useState('Telefonat');
+  const [targetCompany, setTargetCompany] = useState(''); 
+  const [input, setInput] = useState(''); // Optionaler Start-Kontext
+  const apiKey = "AIzaSyCNZaqJ2fLAGyfSfEgJG7u7b4x9qC0mWV8"; 
 
-  // --- DOSSIER & ERGEBNIS STATE ---
+  // --- ENGINE STATE ---
+  const [columboData, setColumboData] = useState({ question: '', options: [] });
+  const [columboAnswer, setColumboAnswer] = useState('');
+  
   const [companyData, setCompanyData] = useState({ address: '', phone: '', comments: '' });
   const [researchTopics, setResearchTopics] = useState([]);
   const [groundingSources, setGroundingSources] = useState([]);
   const [selectedTopic, setSelectedTopic] = useState(null);
   
-  // Posts sind nun Objekte, um die Wahrscheinlichkeiten mit aufzunehmen
   const [posts, setPosts] = useState({ 
       pitch_direct: { text: '', chance: '', reason: '' }, 
       pitch_value: { text: '', chance: '', reason: '' }, 
@@ -38,8 +37,10 @@ export default function App() {
       image: null, 
       description: '' 
   });
+  
   const [scheduleDate, setScheduleDate] = useState('');
   const [customImagePrompt, setCustomImagePrompt] = useState(''); 
+  const [crmFilter, setCrmFilter] = useState('ALL');
   
   // --- UI STATE ---
   const [progress, setProgress] = useState(0);
@@ -51,10 +52,19 @@ export default function App() {
   const [zoomedImage, setZoomedImage] = useState(null);
   const [copiedType, setCopiedType] = useState(null);
 
-  useEffect(() => {
-    if (posts.description) setCustomImagePrompt(posts.description);
-  }, [posts.description]);
+  const columboImageUrl = "https://m.media-amazon.com/images/M/MV5BMzU4MDI3NTc2OV5BMl5BanBnXkFtZTgwNjMzNDIzMzE@._V1_.jpg";
 
+  // Tailwind Injection
+  useEffect(() => {
+    if (!document.getElementById('tailwind-cdn')) {
+      const script = document.createElement('script');
+      script.id = 'tailwind-cdn';
+      script.src = "https://cdn.tailwindcss.com";
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  // Ladebalken
   useEffect(() => {
     let interval;
     if (loading && progress < 98) {
@@ -70,17 +80,15 @@ export default function App() {
   }, [loading, progress]);
 
   const resetEngine = () => {
-    setTargetCompany('');
-    setWarmContext('');
-    setResearchTopics([]);
-    setGroundingSources([]);
+    setTargetCompany(''); setInput(''); setColumboAnswer('');
+    setResearchTopics([]); setGroundingSources([]);
     setCompanyData({ address: '', phone: '', comments: '' });
-    setActiveStep('campaign_select');
+    setActiveStep('input');
   };
 
+  // --- API CALLER ---
   const apiCall = async (payload, useSearch = false) => {
-    if (!apiKey) throw new Error("API-Schlüssel fehlt! Bitte im Code eintragen.");
-    
+    if (!apiKey) throw new Error("API-Schlüssel fehlt! Bitte eintragen.");
     let url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     
     if (useSearch) {
@@ -91,17 +99,11 @@ export default function App() {
     }
 
     const retries = 3;
-    const standardDelay = 2000;
-    const rateLimitDelay = 15000; 
+    const delays = [2000, 5000, 15000]; // Extra Delay für Rate Limits
     
     for (let i = 0; i < retries; i++) {
       try {
-        const response = await fetch(url, { 
-          method: 'POST', 
-          headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify(payload) 
-        });
-        
+        const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         if (!response.ok) {
             const errText = await response.text();
             if (response.status === 429) throw new Error("RATE_LIMIT");
@@ -110,13 +112,13 @@ export default function App() {
         return await response.json();
       } catch (err) {
         if (err.message === "RATE_LIMIT") {
-            if (i === retries - 1) throw new Error("Google Limit hart erreicht. Bitte kurz warten.");
-            setProgressLabel("Google Limit. Kurze Pause (15s)...");
-            await new Promise(resolve => setTimeout(resolve, rateLimitDelay));
+            if (i === retries - 1) throw new Error("Google Limit hart erreicht. Bitte 60s warten.");
+            setProgressLabel("Google Limit erreicht. Kurze Pause (15s)...");
+            await new Promise(resolve => setTimeout(resolve, delays[i]));
             continue; 
         }
         if (i === retries - 1) throw new Error(`KI-Diagnose: ${err.message}`);
-        await new Promise(resolve => setTimeout(resolve, standardDelay));
+        await new Promise(resolve => setTimeout(resolve, delays[0]));
       }
     }
   };
@@ -131,36 +133,45 @@ export default function App() {
     }
   };
 
-  const checkRelevance = async (text) => {
+  // --- PHASE 1: COLUMBO QUESTION ---
+  const startColumbo = async () => {
+    if (!targetCompany.trim()) { setError("Zielunternehmen ist zwingend erforderlich."); return; }
+    
+    setLoading(true); setProgress(5); setProgressLabel(`Analysiere Angriffsfläche für ${targetCompany}...`); setError(null);
+
     try {
-      const res = await apiCall({
-        contents: [{ parts: [{ text: `Analysiere auf B2B Relevanz: "${text}". Antworte AUSSCHLIESSLICH "OK" oder "QUATSCH".` }] }]
+      const prompt = `Du bist Inspektor Columbo, ein B2B Stratege. Firma: "${targetCompany}". Zusatzinfo vom User: "${input}". 
+      Stelle EINE extrem kurze, provokante strategische Rückfrage (max 12 Wörter), um herauszufinden, auf welchen Schmerzpunkt (z.B. IT, Sales, HR, Skalierung) wir uns fokussieren sollen. 
+      Gib ZWEI mögliche Antwort-Richtungen vor.
+      JSON-Format zwingend: {"question": "...", "options": ["Option A", "Option B"]}. Sprache: Deutsch.`;
+      
+      const result = await apiCall({
+        contents: [{ parts: [{ text: input || targetCompany }] }],
+        systemInstruction: { parts: [{ text: prompt }] },
+        generationConfig: { responseMimeType: "application/json" }
       });
-      return res.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toUpperCase() === "QUATSCH";
-    } catch (e) { return false; }
+      
+      const parsed = parseJSON(result.candidates[0].content.parts[0].text);
+      setColumboData({ question: parsed?.question || "Wo brennt es aktuell am meisten in der Infrastruktur?", options: parsed?.options || ["Fokus: Veraltete Systeme", "Fokus: Wachstums-Schmerzen"] });
+      setColumboAnswer('');
+      setActiveStep('columbo');
+    } catch (err) { setError(err.message || "Columbo konnte nicht geladen werden."); } 
+    finally { setLoading(false); setProgress(0); }
   };
 
-  const startResearch = async () => {
-    if (!targetCompany.trim()) { setError("Bitte Unternehmen oder Industrie hinzufügen."); return; }
-    if (campaignType === 'warm' && !warmContext.trim()) { setError("Bitte den Grund der Reaktivierung (Kontext) angeben."); return; }
-    
+  // --- PHASE 2: RESEARCH (Impressum + 3 Hooks) ---
+  const startResearch = async (answer) => {
+    const finalAnswer = answer || columboAnswer;
+    setColumboAnswer(finalAnswer);
     setActiveStep('generating');
-    setLoading(true); setProgress(5); setProgressLabel(`Scanne globale News & Impressum für ${targetCompany}...`); setError(null);
+    setLoading(true); setProgress(15); setProgressLabel(`Scanne globale News & Impressum für ${targetCompany}...`); setError(null);
 
     try {
-        const isQuatsch = await checkRelevance(targetCompany);
-        if (isQuatsch) {
-            setError("Nonsense erkannt. Bitte seriöses Unternehmen/Industrie eingeben.");
-            setLoading(false); setProgress(0); 
-            setActiveStep(campaignType === 'warm' ? 'input_warm' : 'input_cold'); 
-            return;
-        }
-
-        const prompt = `Du bist ein B2B Lead-Research Analyst. Führe eine Websuche für das Unternehmen oder die Industrie "${targetCompany}" durch.
-        Aufgabe 1: Finde die offizielle Adresse (Headquarter) und die zentrale Telefonnummer aus dem Impressum. (Bei Industrien gib "N/A" aus).
-        Aufgabe 2: Entwickle 3 hochaktuelle strategische Aufhänger (Angriffsvorschläge) für einen Pitch an ${persona}.
+        const prompt = `Du bist ein B2B Lead-Research Analyst. Führe eine Live-Websuche für das Unternehmen "${targetCompany}" durch. Berücksichtige den Fokus des Nutzers: "${finalAnswer}".
+        Aufgabe 1: Finde die offizielle Adresse (Headquarter) und die zentrale Telefonnummer aus dem Impressum.
+        Aufgabe 2: Entwickle 3 hochaktuelle strategische Aufhänger (Angriffsvorschläge) für einen Pitch an die Persona "${persona}".
         
-        REGEL: Antworte AUSSCHLIESSLICH mit rohem, gültigen JSON. Kein Markdown!
+        REGEL: Antworte AUSSCHLIESSLICH mit rohem, gültigen JSON.
         Format: {
           "companyInfo": {"address": "...", "phone": "..."},
           "topics": [{"title": "Dein Titel", "rationale": "Dein Schmerzpunkt/Relevanz"}],
@@ -193,43 +204,24 @@ export default function App() {
         setActiveStep('topic_selection');
     } catch (err) { 
       setError(err.message || "Fehler bei der Live-Recherche."); 
-      setActiveStep(campaignType === 'warm' ? 'input_warm' : 'input_cold'); 
+      setActiveStep('columbo'); 
     } 
     finally { setLoading(false); setProgress(0); }
   };
 
+  // --- PHASE 3: PITCH ENGINE ---
   const runContentEngine = async (topic) => {
     setSelectedTopic(topic);
-    setActiveStep('generating'); setProgress(10); setProgressLabel(`Synthetisiere Pitches & Predictive Logic für ${persona}...`); 
+    setActiveStep('generating'); setProgress(10); setProgressLabel(`Synthetisiere Pitches für ${persona}...`); 
     setLoadingItems({ pitch_direct: true, pitch_value: true, pitch_story: true, image: true });
     setLoading(true); setError(null);
 
     const sourcesText = groundingSources.length > 0 ? groundingSources.map((s, i) => `[${i+1}] ${s.url || s.uri}`).join("\n") : "Keine URLs verfügbar.";
 
     try {
-      let contextSetup = "";
-      if (campaignType === 'cold') {
-          contextSetup = `DU MACHST KALTAKQUISE. Aufhänger für deine Nachricht ist AUSSCHLIESSLICH dieses News-Thema: "${topic.title} - ${topic.rationale}".`;
-      } else {
-          let warmText = "";
-          if (warmType === 'event') warmText = `Wir haben sie auf dem Event "${warmContext}" getroffen.`;
-          if (warmType === 'lost_deal') warmText = `Wir hatten einen Lost Deal wegen: "${warmContext}".`;
-          if (warmType === 'old_contact') warmText = `Letzter Kontakt: "${warmContext}".`;
-          
-          contextSetup = `DU REAKTIVIERST EINEN KONTAKT. 
-          HISTORIE: ${warmText}
-          ZIEL: Verbinde diese alte Historie extrem elegant mit dem brandaktuellen News-Thema: "${topic.title} - ${topic.rationale}".`;
-      }
-
-      const actionText = 
-        followUpAction === 'Telefonat' ? "Call-to-Action: Ein kurzes 10-Minuten-Telefonat zum Abgleich anbieten." :
-        followUpAction === 'Video' ? "Call-to-Action: Einen Videocall für einen Deep-Dive vorschlagen." :
-        "Call-to-Action: Eine provokante, offene Frage zur aktuellen IT-Architektur stellen.";
-
       const textPrompt = `WICHTIG: Du bist ein Top-B2B-Sales-Experte von ELWIS. Dein Ziel ist die Akquise VON "${targetCompany}". DU BIST NICHT DIE FIRMA "${targetCompany}"! Du pitchst AN sie.
-      Ziel-Persona: "${persona}". Tonfall-Präferenz des Nutzers: "${tone}". 
-      ${actionText}
-      ${contextSetup}
+      Ziel-Persona: "${persona}". Tonfall: "${tone}". 
+      Aufhänger für die Nachricht: "${topic.title} - ${topic.rationale}".
       Nutze diese Quellen für Fakten: ${sourcesText}
 
       Erzeuge 3 unterschiedliche, kurze bis mittellange Outreach-Pitches (Cold Email Format):
@@ -238,7 +230,7 @@ export default function App() {
       3. "pitch_story": Narrative-Pitch. Greift News/Historie extrem stark auf und baut eine Story zu ELWIS.
       
       ZUSATZAUFGABE (PREDICTIVE LOGIC):
-      Bewerte für JEDEN dieser 3 Pitches realistisch die Erfolgswahrscheinlichkeit (Chance in %) bei der gewählten Persona ("${persona}") unter Berücksichtigung der Ausgangslage. Gib zudem einen extrem kurzen Satz als Begründung (z.B. "C-Level liebt nackte Zahlen" oder "Zu verspielt für IT-Leads").
+      Bewerte für JEDEN dieser 3 Pitches realistisch die Erfolgswahrscheinlichkeit (Chance in %) bei der gewählten Persona ("${persona}"). Gib zudem einen kurzen Satz als Begründung (z.B. "C-Level liebt nackte Zahlen").
       
       5. "visual": Englische Beschreibung für eine abstrakte B2B-Vektorgrafik (KEINE echten Firmennamen/Logos!).
       
@@ -300,14 +292,26 @@ export default function App() {
       finally { setLoadingItems(prev => ({...prev, image: false})); }
   };
 
+  // --- CRM ARCHIVIERUNG ---
   const archiveAsset = async () => {
     setLoading(true);
     try {
-      const name = `${targetCompany.replace(/[^a-zA-Z0-9]/g, "")}_${campaignType === 'warm' ? 'Warm' : 'Cold'}`.substring(0, 20) || "Kampagne";
+      const name = `${targetCompany.replace(/[^a-zA-Z0-9]/g, "")}_Pitch`.substring(0, 20);
       const newAsset = { 
-          id: Date.now(), name: name, ...posts, topic: selectedTopic?.title || 'Unknown', scheduledDate: scheduleDate, 
-          persona, companySize: targetCompany, tone, sources: groundingSources, type: campaignType, 
-          companyAddress: companyData.address, companyPhone: companyData.phone, companyComments: companyData.comments,
+          id: Date.now(), 
+          name: name, 
+          companyName: targetCompany,
+          ...posts, 
+          topic: selectedTopic?.title || 'Unknown', 
+          allTopics: researchTopics, // Wir speichern ALLE Hooks für das CRM
+          scheduledDate: scheduleDate, 
+          persona, 
+          companySize, 
+          tone, 
+          sources: groundingSources, 
+          companyAddress: companyData.address, 
+          companyPhone: companyData.phone, 
+          companyComments: companyData.comments,
           date: new Date().toLocaleDateString() 
       };
       setAssetLibrary([newAsset, ...assetLibrary]);
@@ -316,8 +320,10 @@ export default function App() {
     finally { setLoading(false); }
   };
 
+  // --- UI HELPER ---
   const HorizontalButton = ({ active, onClick, icon: Icon, label }) => (
     <button 
+        type="button"
         onClick={onClick}
         className={`flex-1 flex items-center justify-center gap-2 py-4 px-3 rounded-2xl border-2 transition-all duration-300 ${active ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] scale-105 z-10' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600 hover:bg-slate-800'}`}
     >
@@ -326,13 +332,10 @@ export default function App() {
     </button>
   );
 
-  // Angepasste ContentCard, die nun die Text/Chance/Reason Logik verarbeitet
   const ContentCard = ({ title, pitchData, type, icon: Icon, color }) => {
     const text = pitchData?.text || "Warte auf Engine...";
     const chance = pitchData?.chance || "N/A";
     const reason = pitchData?.reason || "";
-    
-    // Einfache Logik, um die Farbe basierend auf der %-Zahl anzupassen (wenn möglich)
     const numChance = parseInt(chance.replace('%', '')) || 0;
     const chanceColor = numChance > 70 ? 'text-green-400' : numChance > 40 ? 'text-amber-400' : 'text-red-400';
 
@@ -348,8 +351,6 @@ export default function App() {
             {copiedType === type ? <Check size={18} className="text-green-400" /> : <Copy size={18} />}
           </button>
         </div>
-
-        {/* NEU: PREDICTIVE LOGIC UI */}
         {chance !== "N/A" && !loadingItems[type] && (
             <div className="mb-4 pl-4 flex flex-col gap-1">
                 <div className="flex items-center gap-2">
@@ -359,7 +360,6 @@ export default function App() {
                 <span className="text-[10px] text-slate-500 italic opacity-80">{reason}</span>
             </div>
         )}
-
         <div className="bg-black/50 p-6 rounded-3xl border border-slate-800 flex-1 overflow-y-auto relative ml-4 min-h-[150px]">
           {loadingItems[type] && <div className="absolute inset-0 bg-[#0F172A]/90 flex items-center justify-center z-10 rounded-3xl"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}
           <p className="text-slate-200 leading-relaxed whitespace-pre-wrap break-words text-sm">{text}</p>
@@ -367,6 +367,10 @@ export default function App() {
       </div>
     );
   };
+
+  // CRM Logik
+  const uniqueCompanies = ['ALL', ...Array.from(new Set(assetLibrary.map(a => a.companyName).filter(Boolean)))];
+  const displayedAssets = crmFilter === 'ALL' ? assetLibrary : assetLibrary.filter(a => a.companyName === crmFilter);
 
   return (
     <div className="min-h-screen w-full bg-[#020617] text-slate-200 font-sans selection:bg-blue-600/40 overflow-x-hidden">
@@ -378,167 +382,123 @@ export default function App() {
         </div>
       )}
 
+      {/* Header */}
       <header className="sticky top-0 z-50 bg-[#020617]/95 backdrop-blur-xl border-b border-slate-800 p-5 px-6 md:px-10 flex justify-between items-center w-full shadow-2xl">
         <div className="flex items-center gap-6">
-          {activeStep !== 'campaign_select' && <button onClick={resetEngine} className="p-3 bg-slate-800 rounded-full text-blue-400 hover:bg-slate-700 active:scale-95 transition-all"><RotateCcw size={20}/></button>}
+          {activeStep !== 'input' && <button onClick={resetEngine} className="p-3 bg-slate-800 rounded-full text-blue-400 hover:bg-slate-700 active:scale-95 transition-all"><RotateCcw size={20}/></button>}
           <div className="flex flex-col">
             <h1 className="text-sm font-black uppercase tracking-[0.4em] text-white italic">ELWIS LAB</h1>
-            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v44.0 | PREDICTIVE ENGINE</span>
+            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v45.0 | EXECUTIVE CRM MASTER</span>
           </div>
         </div>
-        <button onClick={() => setActiveStep('library')} className="p-4 bg-slate-800 rounded-2xl border border-slate-700 relative hover:bg-slate-700 transition-all">
-          <CalendarDays size={20} className="text-white" />
+        <button onClick={() => setActiveStep('library')} className="p-4 bg-slate-800 rounded-2xl border border-slate-700 relative hover:bg-slate-700 transition-all flex items-center gap-3">
+          <Database size={20} className="text-white" />
+          <span className="text-[10px] font-black uppercase tracking-widest hidden sm:block text-slate-300">CRM Vault</span>
           {assetLibrary.length > 0 && <span className="absolute -top-2 -right-2 w-6 h-6 bg-blue-500 rounded-full text-[10px] flex items-center justify-center font-black border-2 border-[#020617] shadow-lg text-white">{assetLibrary.length}</span>}
         </button>
       </header>
 
       <main className="max-w-[1400px] mx-auto p-4 md:p-8 lg:p-10 w-full flex flex-col flex-1">
         
-        {/* === STEP 0: CAMPAIGN ROUTER === */}
-        {activeStep === 'campaign_select' && (
-          <div className="max-w-5xl mx-auto w-full space-y-16 animate-in slide-in-from-bottom-10 pt-20 flex-1 pb-40">
-            <div className="text-center space-y-6">
-                <div className="inline-flex items-center gap-3 bg-blue-900/30 text-blue-400 px-6 py-2 rounded-full border border-blue-500/30 mb-2 shadow-[0_0_15px_rgba(37,99,235,0.2)]"><Rocket size={16} /> <span className="text-[11px] font-black uppercase tracking-[0.3em] italic">Campaign Initialization</span></div>
-                <h2 className="text-5xl md:text-8xl font-black text-white leading-none tracking-tighter uppercase italic text-center">Wähle deinen <br/>Angriffsvektor.</h2>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                <div onClick={() => { setCampaignType('cold'); setActiveStep('input_cold'); }} className="bg-[#0F172A] p-10 md:p-12 rounded-[4rem] border-4 border-slate-800 hover:border-blue-600 shadow-2xl hover:shadow-[0_0_50px_rgba(37,99,235,0.3)] transition-all cursor-pointer group relative overflow-hidden flex flex-col items-center text-center gap-8">
-                    <div className="absolute -right-10 -top-10 bg-blue-600/10 w-64 h-64 rounded-full blur-[80px] group-hover:bg-blue-600/20 transition-all"></div>
-                    <div className="p-8 bg-black/50 rounded-full border-2 border-slate-800 group-hover:scale-110 transition-transform"><Search size={64} className="text-blue-500" /></div>
-                    <div>
-                        <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight mb-4">1) Kaltakquise</h3>
-                        <p className="text-slate-400 text-xs md:text-sm leading-relaxed">Identifiziere neue Ziele. Die KI führt eine Live-Recherche durch, zieht Impressumsdaten und generiert News-basierte Eisbrecher.</p>
-                    </div>
-                </div>
-
-                <div onClick={() => { setCampaignType('warm'); setActiveStep('input_warm'); }} className="bg-[#0F172A] p-10 md:p-12 rounded-[4rem] border-4 border-slate-800 hover:border-purple-600 shadow-2xl hover:shadow-[0_0_50px_rgba(147,51,234,0.3)] transition-all cursor-pointer group relative overflow-hidden flex flex-col items-center text-center gap-8">
-                    <div className="absolute -left-10 -bottom-10 bg-purple-600/10 w-64 h-64 rounded-full blur-[80px] group-hover:bg-purple-600/20 transition-all"></div>
-                    <div className="p-8 bg-black/50 rounded-full border-2 border-slate-800 group-hover:scale-110 transition-transform"><Users size={64} className="text-purple-500" /></div>
-                    <div>
-                        <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight mb-4">2) Reaktivierung</h3>
-                        <p className="text-slate-400 text-xs md:text-sm leading-relaxed">Aktiviere Bestandskontakte. Verbinde die Historie (Messe, Lost Deal) intelligent mit tagesaktuellen News.</p>
-                    </div>
-                </div>
-            </div>
-          </div>
-        )}
-
-        {/* === STEP 1A: COLD OUTREACH INPUT === */}
-        {activeStep === 'input_cold' && (
-          <div className="max-w-4xl mx-auto w-full space-y-12 animate-in slide-in-from-right-10 pt-10 flex-1 pb-40">
+        {/* === STEP 1: INPUT ENGINE === */}
+        {activeStep === 'input' && (
+          <div className="max-w-4xl mx-auto w-full space-y-12 animate-in slide-in-from-bottom-10 pt-10 flex-1 pb-40">
             <div className="text-center space-y-5">
-                <div className="inline-flex items-center gap-3 bg-blue-900/30 text-blue-400 px-6 py-2 rounded-full border border-blue-500/30 mb-2"><Search size={16} /> <span className="text-[11px] font-black uppercase tracking-[0.3em] italic">Intelligence Module: Kaltakquise</span></div>
+                <div className="inline-flex items-center gap-3 bg-blue-900/30 text-blue-400 px-6 py-2 rounded-full border border-blue-500/30 mb-2 shadow-[0_0_15px_rgba(37,99,235,0.2)]"><ShieldCheck size={16} /> <span className="text-[11px] font-black uppercase tracking-[0.3em] italic">Intelligence Module</span></div>
                 <h2 className="text-5xl md:text-7xl font-black text-white leading-none tracking-tighter uppercase italic text-center">Target Lock.</h2>
             </div>
             
             <div className="bg-[#0F172A] p-6 md:p-12 rounded-[3rem] md:rounded-[4rem] border border-slate-800 shadow-2xl space-y-12 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full blur-[100px]"></div>
                 
-                <div className="space-y-4 relative z-10">
-                    <p className="text-[10px] md:text-[12px] font-black text-slate-500 uppercase tracking-[0.4em] pl-4">1) Personenkreis</p>
-                    <div className="flex flex-col sm:flex-row gap-4 w-full">
-                        <HorizontalButton active={persona === 'Geschäftsführung'} onClick={() => setPersona('Geschäftsführung')} icon={Briefcase} label="C-Level" />
-                        <HorizontalButton active={persona === 'Tech Lead'} onClick={() => setPersona('Tech Lead')} icon={Network} label="Tech Lead" />
-                        <HorizontalButton active={persona === 'Betriebsleiter'} onClick={() => setPersona('Betriebsleiter')} icon={Target} label="Ops Manager" />
-                    </div>
-                </div>
-
-                <div className="space-y-4 relative z-10">
-                    <label className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-500 block pl-4">2) Unternehmen / Industrie</label>
+                <div className="space-y-5 relative z-10">
+                    <label className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-400 italic block pl-4">I. Ziel-Unternehmen (Pflichtfeld)</label>
                     <div className="relative">
                         <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={24} />
-                        <input type="text" className="w-full p-6 md:p-8 pl-16 bg-black border-2 border-slate-800 rounded-[2.5rem] outline-none text-xl md:text-2xl font-black text-white placeholder:text-slate-700 focus:border-blue-600 transition-all shadow-inner uppercase tracking-wide" placeholder="Bitte Unternehmen oder Industrie hinzufügen..." value={targetCompany} onChange={(e) => setTargetCompany(e.target.value)} />
+                        <input type="text" className="w-full p-6 md:p-8 pl-16 bg-black border-2 border-slate-800 rounded-[2.5rem] outline-none text-xl md:text-3xl font-black text-white placeholder:text-slate-800 focus:border-blue-600 transition-all shadow-inner uppercase tracking-wide" placeholder="Z.B. SIEMENS oder ZALANDO" value={targetCompany} onChange={(e) => setTargetCompany(e.target.value)} />
                     </div>
                 </div>
 
-                <div className="space-y-4 relative z-10 pt-4 border-t border-slate-800">
-                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] pl-4">Tonfall (Wichtig für KI-Schätzung)</p>
-                    <div className="flex flex-col sm:flex-row gap-4 w-full">
-                        <HorizontalButton active={tone === 'Analytisch'} onClick={() => setTone('Analytisch')} icon={BarChart3} label="Analytisch" />
-                        <HorizontalButton active={tone === 'Visionär'} onClick={() => setTone('Visionär')} icon={Lightbulb} label="Visionär" />
-                        <HorizontalButton active={tone === 'Direkt'} onClick={() => setTone('Direkt')} icon={Crosshair} label="Knallhart" />
-                    </div>
-                </div>
-
-                <button onClick={startResearch} disabled={loading || !targetCompany.trim()} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-8 md:py-10 rounded-[3.5rem] font-black text-sm md:text-lg uppercase tracking-[0.4em] shadow-[0_20px_50px_-10px_rgba(37,99,235,0.5)] flex items-center justify-center gap-4 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none relative z-20 mt-8">
-                  {loading ? <Loader2 className="animate-spin" size={28} /> : <Zap size={28} />} LET'S GO !
-                </button>
-            </div>
-          </div>
-        )}
-
-        {/* === STEP 1B: WARM OUTREACH INPUT === */}
-        {activeStep === 'input_warm' && (
-          <div className="max-w-4xl mx-auto w-full space-y-12 animate-in slide-in-from-left-10 pt-10 flex-1 pb-40">
-            <div className="text-center space-y-5">
-                <div className="inline-flex items-center gap-3 bg-purple-900/30 text-purple-400 px-6 py-2 rounded-full border border-purple-500/30 mb-2"><Users size={16} /> <span className="text-[11px] font-black uppercase tracking-[0.3em] italic">Intelligence Module: Reaktivierung</span></div>
-                <h2 className="text-5xl md:text-7xl font-black text-white leading-none tracking-tighter uppercase italic text-center">Re-Engagement.</h2>
-            </div>
-            
-            <div className="bg-[#0F172A] p-6 md:p-12 rounded-[3rem] md:rounded-[4rem] border border-slate-800 shadow-2xl space-y-10 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600/5 rounded-full blur-[100px]"></div>
-                
-                <div className="space-y-4 relative z-10">
-                    <p className="text-[10px] md:text-[12px] font-black text-slate-500 uppercase tracking-[0.4em] pl-4">1) Personenkreis</p>
-                    <div className="flex flex-col sm:flex-row gap-4 w-full">
-                        <HorizontalButton active={persona === 'Geschäftsführung'} onClick={() => setPersona('Geschäftsführung')} icon={Briefcase} label="C-Level" />
-                        <HorizontalButton active={persona === 'Tech Lead'} onClick={() => setPersona('Tech Lead')} icon={Network} label="Tech Lead" />
-                        <HorizontalButton active={persona === 'Betriebsleiter'} onClick={() => setPersona('Betriebsleiter')} icon={Target} label="Ops Manager" />
-                    </div>
-                </div>
-
-                <div className="space-y-4 relative z-10">
-                    <label className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-500 block pl-4">2) Unternehmen / Industrie</label>
-                    <div className="relative">
-                        <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={24} />
-                        <input type="text" className="w-full p-6 md:p-8 pl-16 bg-black border-2 border-slate-800 rounded-[2.5rem] outline-none text-xl md:text-2xl font-black text-white placeholder:text-slate-700 focus:border-purple-600 transition-all shadow-inner uppercase tracking-wide" placeholder="Bitte Unternehmen oder Industrie hinzufügen..." value={targetCompany} onChange={(e) => setTargetCompany(e.target.value)} />
-                    </div>
-                </div>
-
-                <div className="pt-8 border-t border-slate-800 relative z-10 space-y-8">
+                <div className="grid grid-cols-1 gap-10 relative z-10">
                     <div className="space-y-4">
-                        <p className="text-[10px] font-black text-purple-400 uppercase tracking-[0.5em] pl-4 flex items-center gap-2"><AlertTriangle size={14}/> Zwingend für die Reaktivierung</p>
-                        <div className="flex flex-col md:flex-row gap-4 w-full">
-                            <HorizontalButton active={warmType === 'event'} onClick={() => setWarmType('event')} icon={MapPin} label="Messe / Event" />
-                            <HorizontalButton active={warmType === 'lost_deal'} onClick={() => setWarmType('lost_deal')} icon={History} label="Lost Opportunity" />
-                            <HorizontalButton active={warmType === 'old_contact'} onClick={() => setWarmType('old_contact')} icon={RefreshCcw} label="Alter Kontakt" />
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] pl-4">II. Ansprechpartner (Persona)</p>
+                        <div className="flex flex-col sm:flex-row gap-4 w-full">
+                            <HorizontalButton active={persona === 'Geschäftsführung'} onClick={() => setPersona('Geschäftsführung')} icon={Briefcase} label="C-Level" />
+                            <HorizontalButton active={persona === 'Tech Lead'} onClick={() => setPersona('Tech Lead')} icon={Network} label="Tech Lead" />
+                            <HorizontalButton active={persona === 'Betriebsleiter'} onClick={() => setPersona('Betriebsleiter')} icon={Target} label="Ops Manager" />
                         </div>
                     </div>
-                    <div className="relative">
-                        {warmType === 'event' && <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={20} />}
-                        {warmType === 'lost_deal' && <History className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={20} />}
-                        {warmType === 'old_contact' && <RefreshCcw className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={20} />}
-                        <input type="text" className="w-full p-6 pl-14 bg-black border-2 border-slate-800 rounded-3xl outline-none text-lg font-bold text-white placeholder:text-slate-700 focus:border-purple-600 transition-all shadow-inner" 
-                            placeholder={
-                                warmType === 'event' ? "Welche Messe? Z.B. OMR 2026..." : 
-                                warmType === 'lost_deal' ? "Warum verloren? Z.B. Budget..." : 
-                                "Kontext? Z.B. Projekt X vor 2 Jahren..."
-                            } 
-                            value={warmContext} onChange={(e) => setWarmContext(e.target.value)} 
-                        />
+                    <div className="space-y-4">
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] pl-4">III. Tonfall</p>
+                        <div className="flex flex-col sm:flex-row gap-4 w-full">
+                            <HorizontalButton active={tone === 'Analytisch'} onClick={() => setTone('Analytisch')} icon={BarChart3} label="Analytisch" />
+                            <HorizontalButton active={tone === 'Visionär'} onClick={() => setTone('Visionär')} icon={Lightbulb} label="Visionär" />
+                            <HorizontalButton active={tone === 'Direkt'} onClick={() => setTone('Direkt')} icon={Crosshair} label="Knallhart" />
+                        </div>
                     </div>
                 </div>
 
-                <button onClick={startResearch} disabled={loading || !targetCompany.trim() || !warmContext.trim()} className="w-full bg-purple-600 hover:bg-purple-500 text-white py-8 md:py-10 rounded-[3.5rem] font-black text-sm md:text-lg uppercase tracking-[0.4em] shadow-[0_20px_50px_-10px_rgba(147,51,234,0.5)] flex items-center justify-center gap-4 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none relative z-20 mt-8">
-                  {loading ? <Loader2 className="animate-spin" size={28} /> : <Zap size={28} />} LET'S GO !
+                <div className="space-y-5 pt-8 border-t border-slate-800 relative z-10">
+                    <label className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-400 italic block pl-4">IV. Eigener Kontext (Optional)</label>
+                    <textarea 
+                        className="w-full h-32 p-6 md:p-8 bg-black border-2 border-slate-800 rounded-[2.5rem] outline-none text-lg font-bold text-white placeholder:text-slate-800 focus:border-blue-600 transition-all shadow-inner leading-relaxed resize-none" 
+                        placeholder="Z.B. Wir haben sie auf der OMR Messe getroffen..." 
+                        value={input} 
+                        onChange={(e) => setInput(e.target.value)} 
+                    />
+                </div>
+
+                <button onClick={startColumbo} disabled={loading || !targetCompany.trim()} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-8 md:py-10 rounded-[3.5rem] font-black text-xs md:text-sm uppercase tracking-[0.4em] md:tracking-[0.6em] shadow-[0_20px_50px_-10px_rgba(37,99,235,0.5)] flex items-center justify-center gap-4 md:gap-6 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none relative z-20 mt-8">
+                  {loading ? <Loader2 className="animate-spin" size={28} /> : <Search size={28} />} ENGINE STARTEN
                 </button>
             </div>
           </div>
         )}
 
-        {/* === STEP 2: DOSSIER & TOPIC SELECTION === */}
+        {/* === STEP 2: COLUMBO NOIR === */}
+        {activeStep === 'columbo' && (
+          <div className="max-w-4xl mx-auto w-full animate-in zoom-in duration-700 flex-1 pb-32 pt-10">
+            <div className="bg-[#0F172A] rounded-[5rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,1)] overflow-hidden relative border border-slate-800">
+                <div className="relative h-[25rem] w-full border-b-[8px] border-blue-600">
+                    <img src={columboImageUrl} alt="Noir Bar" className="w-full h-full object-cover grayscale contrast-125 brightness-[0.6] scale-105" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent opacity-100"></div>
+                </div>
+                
+                <div className="p-10 md:p-16 -mt-24 relative bg-[#0F172A] rounded-t-[5rem] text-center space-y-10">
+                    <div className="inline-block bg-slate-800 px-8 py-3 rounded-full shadow-2xl border border-slate-700">
+                        <h2 className="text-sm font-black uppercase tracking-widest text-slate-300">Just one more thing...</h2>
+                    </div>
+                    <p className="text-3xl md:text-4xl font-bold text-white italic border-l-8 border-blue-600 pl-8 text-left leading-relaxed tracking-tight">"{columboData.question}"</p>
+                    
+                    <div className="grid grid-cols-1 gap-5 pt-4">
+                        {columboData.options && columboData.options.map((opt, i) => (
+                            <button key={i} onClick={() => startResearch(opt)} className="bg-slate-900/50 hover:bg-blue-600 text-white p-6 md:p-8 rounded-[2.5rem] text-sm md:text-lg font-black transition-all border border-slate-800 hover:border-blue-500 flex items-center justify-between group px-10 shadow-lg text-left">
+                                {opt} <ChevronRight size={24} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-2 transition-all text-blue-200 flex-shrink-0 ml-4" />
+                            </button>
+                        ))}
+                        <div className="space-y-6 mt-8 pt-8 border-t border-slate-800 text-left">
+                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 ml-4 mb-2 block">Eigener strategischer Fokus</label>
+                            <textarea className="w-full p-8 bg-black border-2 border-slate-800 rounded-[3rem] font-bold outline-none text-white focus:border-blue-600 h-32 text-lg shadow-inner resize-none" placeholder="Details hinzufügen..." value={columboAnswer} onChange={(e) => setColumboAnswer(e.target.value)} />
+                            <button onClick={() => startResearch(columboAnswer)} disabled={loading || !columboAnswer.trim()} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-8 rounded-[3.5rem] font-black uppercase text-sm flex items-center justify-center gap-4 hover:scale-[1.02] shadow-[0_20px_40px_-10px_rgba(37,99,235,0.4)] transition-all tracking-[0.4em] disabled:opacity-30 disabled:scale-100">
+                                {loading ? <Loader2 className="animate-spin" size={24}/> : <Search size={24}/>} LIVE-RECHERCHE STARTEN
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+          </div>
+        )}
+
+        {/* === STEP 3: DOSSIER & TOPIC SELECTION (DIE SECRET SAUCE) === */}
         {activeStep === 'topic_selection' && (
           <div className="w-full animate-in zoom-in duration-500 flex-1 pb-32 pt-4 flex flex-col lg:flex-row gap-8">
-            
-            {/* SPALTE LINKS: FIRMEN-DOSSIER */}
+            {/* LINKS: FIRMEN-DOSSIER */}
             <div className="w-full lg:w-1/3 flex flex-col gap-6">
                 <div className="bg-[#0F172A] border border-slate-800 rounded-[3rem] p-8 shadow-2xl flex flex-col h-full relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-slate-800/50 rounded-full blur-[50px]"></div>
                     <h2 className="text-xl font-black text-white uppercase tracking-widest border-b border-slate-800 pb-4 mb-6 flex items-center gap-3">
                         <Building2 size={20} className="text-blue-500"/> Firmen-Dossier
                     </h2>
-                    
                     <div className="space-y-6 flex-1 relative z-10">
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 flex items-center gap-2"><MapPin size={12}/> Zentrale (Impressum)</label>
@@ -566,23 +526,23 @@ export default function App() {
                 </div>
             </div>
 
-            {/* SPALTE RECHTS: ANGRIFFSVORSCHLÄGE */}
+            {/* RECHTS: ANGRIFFSVORSCHLÄGE (HOOKS) */}
             <div className="w-full lg:w-2/3 flex flex-col gap-6">
                 <div className="mb-4 space-y-2">
-                    <h2 className={`text-2xl md:text-3xl font-black text-white italic tracking-tighter uppercase border-l-8 pl-6 ${campaignType === 'warm' ? 'border-purple-600' : 'border-blue-600'}`}>
-                        Aktuelle Themen für den Angriff
+                    <h2 className="text-2xl md:text-3xl font-black text-white italic tracking-tighter uppercase border-l-8 pl-6 border-blue-600">
+                        Die Secret Sauce: Aktuelle Themen
                     </h2>
-                    <p className="text-slate-400 pl-8 text-sm">Wähle eines dieser 3 aktuellen News-Themen aus der Recherche, um die Pitch-Matrix zu generieren.</p>
+                    <p className="text-slate-400 pl-8 text-sm">Wähle eines dieser 3 recherchierten News-Themen, um die Pitch-Matrix zu generieren.</p>
                 </div>
 
                 <div className="grid gap-5">
                     {researchTopics.map((topic, i) => (
-                        <div key={i} className={`bg-[#0F172A] border border-slate-800 rounded-[2rem] p-6 hover:-translate-y-1 transition-all flex flex-col sm:flex-row gap-6 items-start sm:items-center group shadow-xl ${campaignType === 'warm' ? 'hover:border-purple-500/50' : 'hover:border-blue-500/50'}`}>
+                        <div key={i} className="bg-[#0F172A] border border-slate-800 rounded-[2rem] p-6 hover:-translate-y-1 transition-all flex flex-col sm:flex-row gap-6 items-start sm:items-center group shadow-xl hover:border-blue-500/50">
                             <div className="flex-1 space-y-2 w-full">
                                 <h3 className="text-lg font-black text-white tracking-tight leading-snug">{topic.title}</h3>
                                 <p className="text-slate-400 text-sm leading-relaxed">{topic.rationale}</p>
                             </div>
-                            <button onClick={() => runContentEngine(topic)} className={`w-full sm:w-auto px-8 py-5 border rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] transition-all flex-shrink-0 flex items-center justify-center gap-2 ${campaignType === 'warm' ? 'bg-purple-600/10 text-purple-400 border-purple-600/30 hover:bg-purple-600 hover:text-white' : 'bg-blue-600/10 text-blue-400 border-blue-600/30 hover:bg-blue-600 hover:text-white'}`}>
+                            <button onClick={() => runContentEngine(topic)} className="w-full sm:w-auto px-8 py-5 border rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] transition-all flex-shrink-0 flex items-center justify-center gap-2 bg-blue-600/10 text-blue-400 border-blue-600/30 hover:bg-blue-600 hover:text-white">
                                 Pitches erstellen <ChevronRight size={16} />
                             </button>
                         </div>
@@ -594,14 +554,14 @@ export default function App() {
                     {groundingSources.length > 0 ? (
                         <ul className="space-y-2">
                             {groundingSources.map((source, i) => (
-                                <li key={i} className={`text-xs truncate hover:underline ${campaignType === 'warm' ? 'text-purple-400' : 'text-blue-400'}`}>
+                                <li key={i} className="text-xs truncate hover:underline text-blue-400">
                                     <a href={source.url || source.uri} target="_blank" rel="noopener noreferrer">[{i+1}] {source.title || source.url || source.uri}</a>
                                 </li>
                             ))}
                         </ul>
                     ) : (
                         <div className="flex items-center gap-3 text-amber-500 text-xs bg-amber-500/10 p-4 rounded-xl border border-amber-500/20">
-                            <AlertTriangle size={14} /> Keine direkten News-URLs verknüpft.
+                            <AlertTriangle size={14} /> Keine direkten URLs verknüpft.
                         </div>
                     )}
                 </div>
@@ -609,157 +569,180 @@ export default function App() {
           </div>
         )}
 
-        {/* === STEP 3: LOADING === */}
+        {/* === STEP 4: LOADING (BIG PROGRESS BAR) === */}
         {activeStep === 'generating' && (
-          <div className="max-w-2xl mx-auto py-32 md:py-56 space-y-12 md:space-y-16 text-center animate-in fade-in flex-1">
-            <div className="relative inline-flex items-center justify-center scale-125 md:scale-[2] mb-10 md:mb-16">
-                <div className={`w-24 h-24 md:w-32 md:h-32 border-[6px] md:border-[8px] border-slate-800 rounded-full ${campaignType === 'warm' ? 'border-t-purple-500' : 'border-t-blue-500'} animate-spin`} />
-                <Zap size={32} className={`absolute m-auto ${campaignType === 'warm' ? 'text-purple-500 fill-purple-500' : 'text-blue-500 fill-blue-500'} animate-pulse`} />
+          <div className="max-w-2xl mx-auto py-56 space-y-16 text-center animate-in fade-in flex-1">
+            <div className="relative inline-flex items-center justify-center scale-[2] mb-16">
+                <div className="w-32 h-32 border-[8px] border-slate-800 rounded-full border-t-blue-500 animate-spin" />
+                <Zap size={40} className="absolute m-auto text-blue-500 fill-blue-500 animate-pulse" />
             </div>
-            <div className="space-y-6 md:space-y-8 px-4">
-                <h2 className="text-2xl md:text-4xl font-black uppercase italic tracking-[0.2em] md:tracking-[0.3em] text-white drop-shadow-lg">{progressLabel}</h2>
-                <div className="w-full bg-slate-900 h-6 md:h-8 rounded-full overflow-hidden border-2 md:border-4 border-slate-800 shadow-inner p-1">
-                    <div className={`h-full ${campaignType === 'warm' ? 'bg-purple-600 shadow-[0_0_20px_rgba(147,51,234,0.8)]' : 'bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.8)]'} rounded-full transition-all duration-300 relative overflow-hidden flex items-center justify-end pr-4`} style={{ width: `${progress}%` }}>
+            <div className="space-y-8">
+                <h2 className="text-4xl font-black uppercase italic tracking-[0.3em] text-white drop-shadow-lg">{progressLabel || "Synthesizing Asset"}</h2>
+                <div className="w-full bg-slate-900 h-8 rounded-full overflow-hidden border-4 border-slate-800 shadow-inner p-1">
+                    <div className="h-full bg-blue-600 rounded-full transition-all duration-300 shadow-[0_0_20px_rgba(37,99,235,0.8)] relative overflow-hidden flex items-center justify-end pr-4" style={{ width: `${progress}%` }}>
                         <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]"></div>
                     </div>
                 </div>
+                <p className="text-sm font-black text-blue-500 uppercase tracking-[0.6em]">{Math.round(progress)}% Integrated</p>
             </div>
           </div>
         )}
 
-        {/* === STEP 4: RESULTS (DIE PITCH MATRIX) === */}
+        {/* === STEP 5: RESULTS (DIE PITCH MATRIX) === */}
         {activeStep === 'result' && (
-          <div className="flex flex-col xl:flex-row gap-8 md:gap-10 animate-in fade-in slide-in-from-bottom-10 pb-32 w-full pt-4 md:pt-8">
-            
-            {/* LINKE SPALTE: PITCH CONTENT */}
-            <div className="w-full xl:w-2/3 space-y-8">
-              <div className="flex flex-col sm:flex-row gap-4 p-5 bg-[#0F172A] border border-slate-800 rounded-[2rem] items-center shadow-xl">
-                 <div className="flex flex-col flex-1 px-4 sm:border-r border-slate-700 w-full text-center sm:text-left"><span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Target</span><span className={`text-sm font-bold truncate ${campaignType === 'warm' ? 'text-purple-400' : 'text-blue-400'}`}>{targetCompany}</span></div>
-                 <div className="flex flex-col flex-1 px-4 sm:border-r border-slate-700 w-full text-center sm:text-left"><span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Persona</span><span className="text-sm text-white font-bold">{persona}</span></div>
-                 <div className="flex flex-col flex-1 px-4 w-full text-center sm:text-left"><span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Context</span><span className="text-sm text-white font-bold truncate">{campaignType === 'warm' ? (warmType === 'event' ? 'Messe' : warmType === 'lost_deal' ? 'Lost Deal' : 'Refresh') : selectedTopic?.title}</span></div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 animate-in fade-in slide-in-from-bottom-10 pb-32 w-full pt-8">
+            <div className="lg:col-span-7 space-y-10">
+              {/* Info Bar */}
+              <div className="flex flex-col sm:flex-row gap-4 p-6 bg-[#0F172A] border border-slate-800 rounded-[2.5rem] items-center shadow-2xl">
+                 <div className="flex flex-col flex-1 px-4 sm:border-r border-slate-700 w-full text-center sm:text-left"><span className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Segment</span><span className="text-sm text-white font-bold">{companySize}</span></div>
+                 <div className="flex flex-col flex-1 px-4 sm:border-r border-slate-700 w-full text-center sm:text-left"><span className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Persona</span><span className="text-sm text-white font-bold">{persona}</span></div>
+                 <div className="flex flex-col flex-1 px-4 w-full text-center sm:text-left"><span className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Tone</span><span className="text-sm text-white font-bold">{tone}</span></div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                  <ContentCard title="Hard Pitch (Direkt)" pitchData={posts.pitch_direct} type="pitch_direct" icon={Crosshair} color="bg-red-500" />
                  <ContentCard title="Value Pitch (Mehrwert)" pitchData={posts.pitch_value} type="pitch_value" icon={BarChart3} color="bg-blue-500" />
               </div>
               <ContentCard title="Narrative Pitch (Story/News)" pitchData={posts.pitch_story} type="pitch_story" icon={AlignJustify} color="bg-purple-500" />
             </div>
             
-            {/* RECHTE SPALTE: DOSSIER RECAP & SPEICHERN */}
-            <div className="w-full xl:w-1/3 flex flex-col gap-8">
-              <div className="bg-[#0F172A] p-6 md:p-8 rounded-[2.5rem] md:rounded-[3.5rem] shadow-2xl border border-slate-800 w-full">
-                
-                {/* DOSSIER RECAP */}
-                <div className="mb-8 space-y-4 bg-black/40 p-6 rounded-3xl border border-slate-800">
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 border-b border-slate-800 pb-2">Unternehmensdaten</h3>
-                    <div className="flex items-start gap-3">
-                        <Phone size={14} className="text-slate-400 mt-1 flex-shrink-0" />
-                        <span className="text-sm font-bold text-white">{companyData.phone || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-start gap-3">
-                        <MapPin size={14} className="text-slate-400 mt-1 flex-shrink-0" />
-                        <span className="text-xs text-slate-300 leading-tight">{companyData.address || 'N/A'}</span>
-                    </div>
-                </div>
-
-                {/* DAS BILD */}
-                <div className="flex justify-between items-center mb-4 px-2">
-                    <span className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-400">Brand Visual</span>
-                </div>
-                
-                <div className="aspect-video bg-black rounded-[2rem] border-8 border-slate-900 overflow-hidden flex items-center justify-center relative group cursor-zoom-in mb-6" onClick={() => posts.image && setZoomedImage(posts.image)}>
-                    {loadingItems.image ? <Loader2 className="animate-spin text-slate-700" size={32} /> : posts.image ? <img src={posts.image} alt="Visual" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" /> : <ImageIcon className="text-slate-800" size={32} />}
-                </div>
-
-                <div className="bg-black/50 p-4 rounded-[2rem] border border-slate-800 mb-6 space-y-3">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 flex items-center gap-2"><Edit3 size={12}/> AI Image Prompt</label>
-                    <textarea 
-                        value={customImagePrompt} 
-                        onChange={(e) => setCustomImagePrompt(e.target.value)}
-                        className="w-full p-4 bg-slate-900 border-2 border-slate-800 rounded-2xl text-slate-300 outline-none text-xs focus:border-blue-600 transition-colors h-20 resize-none"
-                        placeholder="Beschreibe das Bild auf Englisch..."
-                    />
-                    <button onClick={() => generateImage()} disabled={loadingItems.image} className="w-full py-3 rounded-xl font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-2 transition-all bg-blue-900/40 text-blue-400 hover:bg-blue-600 hover:text-white">
-                       <RefreshCw size={14} className={loadingItems.image ? 'animate-spin' : ''}/> {loadingItems.image ? 'Rendering...' : 'Bild generieren'}
+            <div className="lg:col-span-5 flex flex-col gap-10">
+              <div className="bg-[#0F172A] p-8 md:p-10 rounded-[4rem] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)] border border-slate-800">
+                <div className="flex justify-between items-center mb-8 px-2">
+                    <span className="text-[12px] font-black uppercase tracking-[0.4em] text-slate-400">Brand Visual</span>
+                    <button onClick={() => generateImage()} disabled={loadingItems.image} className="p-4 bg-slate-800 rounded-full hover:bg-blue-600 hover:text-white transition-colors text-slate-300 disabled:opacity-50">
+                        <RefreshCw size={20} className={loadingItems.image ? 'animate-spin' : ''}/>
                     </button>
                 </div>
+                
+                <div className="aspect-square bg-black rounded-[3.5rem] border-[12px] border-slate-900 overflow-hidden flex items-center justify-center relative group cursor-zoom-in mb-8 shadow-inner" onClick={() => posts.image && setZoomedImage(posts.image)}>
+                    {loadingItems.image && <div className="absolute inset-0 bg-[#0F172A]/90 flex items-center justify-center z-20"><Loader2 className="animate-spin text-blue-500" size={64} /></div>}
+                    {posts.image ? <img src={posts.image} alt="Visual" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" /> : <Loader2 className="animate-spin text-slate-700" size={48} />}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-blue-900/20 backdrop-blur-sm"><Maximize2 size={48} className="text-white drop-shadow-lg" /></div>
+                </div>
 
-                {/* SPEICHERN */}
-                <div className="bg-black/50 p-5 rounded-[2rem] border border-slate-800 mb-6 space-y-4">
-                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 flex items-center gap-2"><CalendarDays size={12}/> Schedule Date</label>
-                    <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} className="w-full p-4 bg-slate-900 border-2 border-slate-800 rounded-2xl text-white outline-none text-sm font-bold focus:border-blue-600 transition-colors" />
+                <div className="bg-black/50 p-6 rounded-[2.5rem] border border-slate-800 mb-8 space-y-4">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-2 flex items-center gap-3"><CalendarDays size={14}/> Schedule Date</label>
+                    <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} className="w-full p-5 bg-slate-900 border-2 border-slate-800 rounded-3xl text-white outline-none text-sm font-bold focus:border-blue-600 transition-colors" />
                 </div>
                 
-                <div className="grid grid-cols-2 gap-3">
-                    <button onClick={archiveAsset} disabled={loading} className={`py-5 bg-green-600 text-white rounded-[2rem] font-black text-[10px] uppercase shadow-[0_15px_30px_-10px_rgba(22,163,74,0.5)] hover:bg-green-500 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50`}><Save size={16}/> SAVE</button>
-                    <button onClick={() => setActiveStep('library')} className="py-5 bg-slate-800 text-white rounded-[2rem] font-black text-[10px] uppercase hover:bg-slate-700 active:scale-95 flex items-center justify-center gap-2 transition-all"><Library size={16}/> VAULT</button>
+                <div className="grid grid-cols-2 gap-4">
+                    <button onClick={archiveAsset} disabled={loading} className="py-8 bg-green-600 text-white rounded-[3rem] font-black text-[11px] uppercase shadow-[0_15px_30px_-10px_rgba(22,163,74,0.5)] hover:bg-green-500 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50"><Save size={20}/> SAVE</button>
+                    <button onClick={() => setActiveStep('library')} className="py-8 bg-slate-800 text-white rounded-[3rem] font-black text-[11px] uppercase shadow-xl hover:bg-slate-700 active:scale-95 flex items-center justify-center gap-3 transition-all"><Library size={20}/> VAULT</button>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* === STEP 5: VAULT === */}
+        {/* === STEP 6: VAULT / CRM === */}
         {activeStep === 'library' && (
-          <div className="space-y-16 animate-in slide-in-from-right-16 pb-32 px-2 md:px-4 w-full flex-1 flex flex-col pt-10">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 px-2 md:px-8 border-b border-slate-800 pb-10">
-                <div><h2 className="text-5xl md:text-8xl font-black uppercase italic tracking-tighter text-white leading-none">The Vault.</h2><p className="text-blue-500 text-[10px] md:text-[12px] font-bold uppercase tracking-[0.6em] mt-4 md:mt-8">Strategic Asset & Dossier Management</p></div>
-                <button onClick={resetEngine} className="bg-white text-slate-900 px-10 md:px-12 py-4 md:py-5 rounded-full text-[10px] md:text-[11px] font-black uppercase hover:scale-105 active:scale-95 transition-all tracking-[0.3em]">Zum Router</button>
-            </div>
+          <div className="flex flex-col lg:flex-row gap-8 pb-32 pt-10 h-[calc(100vh-100px)]">
             
-            {assetLibrary.length === 0 ? (
-                <div className="bg-[#0F172A]/50 p-20 md:p-60 rounded-[4rem] md:rounded-[6rem] border-4 border-dashed border-slate-800 flex flex-col items-center justify-center">
-                    <Library size={60} md:size={80} className="text-slate-800 mb-8 md:mb-10" />
-                    <p className="text-slate-600 text-xs md:text-sm font-black uppercase tracking-[0.6em] italic text-center">Vault is empty.</p>
+            {/* CRM SIDEBAR (Filter) */}
+            <div className="w-full lg:w-1/4 bg-[#0F172A] rounded-[3rem] border border-slate-800 flex flex-col overflow-hidden h-full">
+                <div className="p-8 border-b border-slate-800 bg-black/30">
+                    <h2 className="text-2xl font-black uppercase italic tracking-tighter text-white">CRM Directory</h2>
+                    <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mt-2">In-Memory Alpha</p>
                 </div>
-            ) : (
-                <div className="space-y-10 md:space-y-16 mt-10">
-                    {assetLibrary.map((item) => (
-                        <div key={item.id} className="bg-[#0F172A] rounded-[3rem] md:rounded-[4rem] border border-slate-800 overflow-hidden flex flex-col shadow-2xl hover:-translate-y-2 transition-all duration-500">
-                            <div className="p-6 md:p-10 bg-black/50 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-slate-800">
-                                <div className="flex items-center gap-4 md:gap-6 flex-1 w-full">
-                                    <div className={`px-4 md:px-5 py-2 md:py-2.5 rounded-xl md:rounded-2xl border flex items-center gap-2 flex-shrink-0 ${item.type === 'warm' ? 'bg-purple-900/30 text-purple-400 border-purple-500/30' : 'bg-blue-900/30 text-blue-400 border-blue-500/30'}`}>
-                                        {item.type === 'warm' ? <Users size={14}/> : <Search size={14}/>}
-                                        <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest">{item.scheduledDate || 'DRAFT'}</span>
-                                    </div>
-                                    <span className="text-lg md:text-2xl font-black uppercase truncate italic tracking-tighter opacity-90">{item.name}</span>
-                                </div>
-                                <div className="flex items-center gap-3 md:gap-4">
-                                    <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-900 px-3 md:px-4 py-2 rounded-xl border border-slate-800 hidden sm:block">{item.companySize}</span>
-                                    <span className={`text-[8px] md:text-[9px] font-black uppercase tracking-widest px-3 md:px-4 py-2 rounded-xl border ${item.type === 'warm' ? 'text-purple-400 bg-purple-900/20 border-purple-900/50' : 'text-blue-400 bg-blue-900/20 border-blue-900/50'}`}>{item.persona}</span>
-                                    <button onClick={() => setAssetLibrary(assetLibrary.filter(a => a.id !== item.id))} className="text-slate-600 hover:text-red-500 p-2 md:p-3 bg-black/40 rounded-full"><Trash2 size={16} md:size={18} /></button>
-                                </div>
-                            </div>
-                            <div className="p-6 md:p-12 flex flex-col md:flex-row gap-8 md:gap-12 items-start">
-                                {/* Dossier Info im Vault */}
-                                <div className="w-full md:w-1/3 bg-black/40 p-6 rounded-[2rem] border border-slate-800 space-y-4">
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-800 pb-2">Firmendaten</p>
-                                    <p className="text-sm font-bold text-white flex items-center gap-2"><Phone size={14} className="text-slate-400"/> {item.companyPhone || 'N/A'}</p>
-                                    {item.companyComments && (
-                                        <div className="mt-4 pt-4 border-t border-slate-800">
-                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Notizen</p>
-                                            <p className="text-xs text-slate-400 italic line-clamp-3">{item.companyComments}</p>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex-1 flex flex-col justify-center space-y-4 md:space-y-6 w-full">
-                                    <p className={`text-[9px] md:text-[10px] font-black uppercase tracking-[0.5em] italic ${item.type === 'warm' ? 'text-purple-500' : 'text-blue-500'}`}>{item.type === 'warm' ? 'Warm Angle' : 'Cold Angle'}</p>
-                                    <p className="text-lg md:text-xl font-bold text-white line-clamp-4 italic tracking-tight leading-relaxed">"{item.topic}"</p>
-                                </div>
-                            </div>
-                        </div>
+                <div className="p-4 flex-1 overflow-y-auto space-y-2">
+                    {uniqueCompanies.map((company) => (
+                        <button 
+                            key={company} 
+                            onClick={() => setCrmFilter(company)}
+                            className={`w-full text-left p-4 rounded-2xl text-sm font-bold transition-all flex items-center justify-between ${crmFilter === company ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                        >
+                            <span className="truncate">{company}</span>
+                            {company !== 'ALL' && <span className="text-[10px] bg-black/30 px-2 py-1 rounded-lg">{assetLibrary.filter(a => a.companyName === company).length}</span>}
+                        </button>
                     ))}
                 </div>
-            )}
+                <div className="p-4 border-t border-slate-800 bg-black/30">
+                    <button onClick={resetEngine} className="w-full bg-slate-800 text-white py-4 rounded-2xl text-[10px] font-black uppercase hover:bg-slate-700 transition-all flex items-center justify-center gap-2">
+                        <RotateCcw size={14}/> Studio Return
+                    </button>
+                </div>
+            </div>
+
+            {/* VAULT CONTENT AREA */}
+            <div className="w-full lg:w-3/4 flex-1 overflow-y-auto h-full pr-2">
+                {displayedAssets.length === 0 ? (
+                    <div className="bg-[#0F172A]/50 h-full rounded-[4rem] border-4 border-dashed border-slate-800 flex flex-col items-center justify-center">
+                        <Database size={80} className="text-slate-800 mb-8" />
+                        <p className="text-slate-600 text-sm font-black uppercase tracking-[0.6em] italic text-center">CRM ist leer.</p>
+                    </div>
+                ) : (
+                    <div className="space-y-8">
+                        {displayedAssets.map((item) => (
+                            <div key={item.id} className="bg-[#0F172A] rounded-[3rem] border border-slate-800 overflow-hidden shadow-2xl flex flex-col">
+                                {/* Header */}
+                                <div className="p-6 bg-black/50 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800">
+                                    <div className="flex items-center gap-4 w-full sm:w-auto">
+                                        <div className="bg-blue-900/30 text-blue-400 px-4 py-2 rounded-xl border border-blue-500/30 flex items-center gap-2"><Clock size={14}/> <span className="text-[10px] font-black uppercase tracking-widest">{item.scheduledDate || 'DRAFT'}</span></div>
+                                        <div className="flex items-center gap-3 flex-1">
+                                            {editingId === item.id ? (
+                                                <div className="flex items-center gap-2"><input type="text" className="bg-slate-900 px-3 py-1 rounded-lg outline-none font-bold text-sm border border-blue-500" defaultValue={item.name} onBlur={(e) => updateAsset(item.id, e.target.value)} autoFocus /><CheckCircle2 size={20} className="text-green-500 cursor-pointer" /></div>
+                                            ) : (
+                                                <><span className="text-lg font-black uppercase truncate italic">{item.name}</span><button onClick={() => setEditingId(item.id)} className="opacity-30 hover:opacity-100"><Edit3 size={14}/></button></>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">{item.companySize}</span>
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-blue-400 bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-900/50">{item.persona}</span>
+                                        <button onClick={() => setAssetLibrary(assetLibrary.filter(a => a.id !== item.id))} className="text-slate-600 hover:text-red-500 p-1.5 hover:bg-black rounded-lg"><Trash2 size={16} /></button>
+                                    </div>
+                                </div>
+                                
+                                {/* Body */}
+                                <div className="p-8 flex flex-col md:flex-row gap-8">
+                                    {/* Dossier Data im CRM */}
+                                    <div className="w-full md:w-1/3 bg-black/30 p-6 rounded-[2rem] border border-slate-800 space-y-4">
+                                        <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest border-b border-slate-800 pb-2 mb-4">Impressum & Notes</h4>
+                                        <div className="space-y-3">
+                                            <p className="text-xs text-white font-bold flex items-center gap-2"><Phone size={12} className="text-slate-500"/> {item.companyPhone || 'N/A'}</p>
+                                            <p className="text-xs text-slate-400 leading-tight flex items-start gap-2"><MapPin size={12} className="text-slate-500 mt-0.5 flex-shrink-0"/> {item.companyAddress || 'N/A'}</p>
+                                        </div>
+                                        {item.companyComments && (
+                                            <div className="mt-4 pt-4 border-t border-slate-800">
+                                                <p className="text-[9px] font-black uppercase text-slate-500 mb-1">Analyst Notes</p>
+                                                <p className="text-xs text-slate-300 italic">{item.companyComments}</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Hooks & Strategy */}
+                                    <div className="w-full md:w-2/3 flex flex-col gap-4">
+                                        <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2 border-b border-slate-800 pb-2">Recherchierte Hooks</h4>
+                                        <div className="space-y-3 overflow-y-auto max-h-48 pr-2">
+                                            {item.allTopics && item.allTopics.length > 0 ? item.allTopics.map((t, idx) => (
+                                                <div key={idx} className={`p-4 rounded-xl border ${t.title === item.topic ? 'bg-blue-900/20 border-blue-500/30' : 'bg-slate-900 border-slate-800'}`}>
+                                                    <p className="text-sm font-bold text-white mb-1">{t.title}</p>
+                                                    <p className="text-xs text-slate-400 line-clamp-2">{t.rationale}</p>
+                                                </div>
+                                            )) : (
+                                                <div className="p-4 bg-slate-900 rounded-xl border border-slate-800"><p className="text-sm font-bold text-white mb-1">{item.topic}</p><p className="text-xs text-slate-500">Keine weiteren Hooks gespeichert.</p></div>
+                                            )}
+                                        </div>
+                                        <div className="pt-4 mt-auto">
+                                            <button onClick={() => loadFromArchive(item)} className="w-full py-4 bg-blue-600 text-white text-[10px] font-black uppercase tracking-[0.4em] hover:bg-blue-500 transition-all rounded-2xl shadow-lg flex items-center justify-center gap-2"><FolderOpen size={16}/> KAMpagne ÖFFNEN</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
           </div>
         )}
 
+        {/* --- GLOBAL ERROR ALERT --- */}
         {error && (
-          <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-950 text-red-200 px-6 md:px-8 py-4 md:py-6 rounded-[2rem] md:rounded-[2.5rem] shadow-[0_0_100px_rgba(220,38,38,0.5)] border-2 border-red-900 flex items-center gap-4 md:gap-6 z-[200] w-[90vw] md:max-w-2xl animate-in slide-in-from-bottom-6">
-            <ShieldAlert size={28} md:size={32} className="text-red-500 flex-shrink-0" />
-            <span className="text-xs md:text-sm font-bold italic flex-1">{error}</span>
-            <button onClick={() => setError(null)} className="p-2 text-red-500 hover:text-white hover:bg-red-900 rounded-full transition-colors flex-shrink-0"><X size={20}/></button>
+          <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-950 text-red-200 px-8 py-6 rounded-[2.5rem] shadow-[0_0_100px_rgba(220,38,38,0.5)] border-2 border-red-900 flex items-center gap-6 z-[200] max-w-[90vw] animate-in slide-in-from-bottom-6">
+            <ShieldAlert size={32} className="text-red-500 flex-shrink-0" />
+            <span className="text-sm md:text-base font-bold italic">{error}</span>
+            <button onClick={() => setError(null)} className="p-2 text-red-500 hover:text-white hover:bg-red-900 rounded-full transition-colors"><X size={20}/></button>
           </div>
         )}
       </main>
