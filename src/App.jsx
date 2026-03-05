@@ -1,858 +1,776 @@
-import React, { useState, useEffect } from "react";
-import {
-  Loader2,
-  Send,
-  RefreshCw,
-  BarChart3,
-  FileText,
-  Sparkles,
-  Download,
-  AlertCircle,
-  Globe,
-  Copy,
-  Check,
-  MessageSquarePlus,
-  Zap,
-  ArrowLeft,
-  Library,
-  Save,
-  Trash2,
-  Lock,
-  ChevronRight,
-  ShieldAlert,
-  AlignLeft,
-  RotateCcw,
-  Image as ImageIcon,
-  Edit3,
-  X,
-  CheckCircle2,
-  Maximize2,
-  AlignCenter,
-  AlignJustify,
-  ShieldCheck,
-  Rocket,
-  CalendarDays,
-  Clock,
-  MessageCircle,
-  Target,
-  Users,
-  Briefcase,
-} from "lucide-react";
+// @ts-nocheck
+import React, { useState, useEffect } from 'react';
+import { 
+  Loader2, Send, RefreshCw, BarChart3, Sparkles, Copy, Check, Zap, 
+  RotateCcw, Image as ImageIcon, X, CheckCircle2, Maximize2, 
+  AlignCenter, AlignJustify, AlignLeft, ShieldCheck, Rocket, CalendarDays, 
+  Clock, MessageCircle, Target, Briefcase, ShieldAlert, Library, Save, Trash2, ChevronRight,
+  Building2, Globe2, Network, Lightbulb, Crosshair, Info, Edit3, Search, Link as LinkIcon, AlertTriangle,
+  Users, PhoneCall, Video, HelpCircle, MapPin, History, RefreshCcw, Phone, StickyNote, Activity
+} from 'lucide-react';
 
 export default function App() {
-  // --- KERN-ZUSTAND ---
-  const [activeStep, setActiveStep] = useState("input");
-  const [language, setLanguage] = useState("EN");
-  const [input, setInput] = useState("");
-  const [persona, setPersona] = useState("Executive");
+  const [activeStep, setActiveStep] = useState('campaign_select'); 
+  const [campaignType, setCampaignType] = useState(''); 
+  const apiKey = "AIzaSyCNZaqJ2fLAGyfSfEgJG7u7b4x9qC0mWV8"; 
 
-  // --- COLUMBO ZUSTAND ---
-  const [columboData, setColumboData] = useState({ question: "", options: [] });
-  const [customAnswer, setCustomAnswer] = useState("");
-  const [selectedAnswer, setSelectedAnswer] = useState("");
-  const [columboSafetyTriggered, setColumboSafetyTriggered] = useState(false);
+  // --- EINGABE STATE ---
+  const [targetCompany, setTargetCompany] = useState('');
+  const [persona, setPersona] = useState('Geschäftsführung');
+  const [tone, setTone] = useState('Analytisch');
+  
+  const [warmType, setWarmType] = useState('event'); 
+  const [warmContext, setWarmContext] = useState(''); 
+  const [followUpAction, setFollowUpAction] = useState('Telefonat');
 
-  // --- CONTENT ZUSTAND ---
-  const [posts, setPosts] = useState({
-    micro: "",
-    short: "",
-    medium: "",
-    long: "",
-    image: null,
-    description: "",
+  // --- DOSSIER & ERGEBNIS STATE ---
+  const [companyData, setCompanyData] = useState({ address: '', phone: '', comments: '' });
+  const [researchTopics, setResearchTopics] = useState([]);
+  const [groundingSources, setGroundingSources] = useState([]);
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  
+  // Posts sind nun Objekte, um die Wahrscheinlichkeiten mit aufzunehmen
+  const [posts, setPosts] = useState({ 
+      pitch_direct: { text: '', chance: '', reason: '' }, 
+      pitch_value: { text: '', chance: '', reason: '' }, 
+      pitch_story: { text: '', chance: '', reason: '' }, 
+      image: null, 
+      description: '' 
   });
-  const [scheduleDate, setScheduleDate] = useState("");
-
-  // --- UI ZUSTAND ---
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [customImagePrompt, setCustomImagePrompt] = useState(''); 
+  
+  // --- UI STATE ---
   const [progress, setProgress] = useState(0);
-  const [progressLabel, setProgressLabel] = useState("");
+  const [progressLabel, setProgressLabel] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loadingItems, setLoadingItems] = useState({
-    micro: false,
-    short: false,
-    medium: false,
-    long: false,
-    image: false,
-  });
-
+  const [loadingItems, setLoadingItems] = useState({ pitch_direct: false, pitch_value: false, pitch_story: false, image: false });
   const [error, setError] = useState(null);
-  const [safetyTriggered, setSafetyTriggered] = useState(false);
   const [assetLibrary, setAssetLibrary] = useState([]);
-  const [editingId, setEditingId] = useState(null);
-  const [copiedType, setCopiedType] = useState(null);
   const [zoomedImage, setZoomedImage] = useState(null);
+  const [copiedType, setCopiedType] = useState(null);
 
-  const apiKey = "";
-  const columboImageUrl =
-    "https://m.media-amazon.com/images/M/MV5BMzU4MDI3NTc2OV5BMl5BanBnXkFtZTgwNjMzNDIzMzE@._V1_.jpg";
-
-  // --- TAILWIND INJEKTION (Sicherheitsnetz für Sandbox) ---
   useEffect(() => {
-    const link = document.createElement("link");
-    link.href =
-      "https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css";
-    link.rel = "stylesheet";
-    document.head.appendChild(link);
-  }, []);
+    if (posts.description) setCustomImagePrompt(posts.description);
+  }, [posts.description]);
 
-  // --- API LOGIK ---
   useEffect(() => {
     let interval;
     if (loading && progress < 98) {
       interval = setInterval(() => {
-        setProgress((prev) => (prev < 45 ? prev + 7 : prev + 0.6));
-      }, 350);
+        setProgress((prev) => {
+          if (prev < 40) return prev + 6;
+          if (prev < 85) return prev + 1.5;
+          return prev + 0.2;
+        });
+      }, 300);
     }
     return () => clearInterval(interval);
   }, [loading, progress]);
 
-  const apiCall = async (url, payload, retries = 5) => {
-    let delay = 1000;
+  const resetEngine = () => {
+    setTargetCompany('');
+    setWarmContext('');
+    setResearchTopics([]);
+    setGroundingSources([]);
+    setCompanyData({ address: '', phone: '', comments: '' });
+    setActiveStep('campaign_select');
+  };
+
+  const apiCall = async (payload, useSearch = false) => {
+    if (!apiKey) throw new Error("API-Schlüssel fehlt! Bitte im Code eintragen.");
+    
+    let url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    
+    if (useSearch) {
+        payload.tools = [{ "google_search": {} }];
+        if (payload.generationConfig && payload.generationConfig.responseMimeType) {
+            delete payload.generationConfig.responseMimeType;
+        }
+    }
+
+    const retries = 3;
+    const standardDelay = 2000;
+    const rateLimitDelay = 15000; 
+    
     for (let i = 0; i < retries; i++) {
       try {
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+        const response = await fetch(url, { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(payload) 
         });
-        if (response.ok) return await response.json();
+        
+        if (!response.ok) {
+            const errText = await response.text();
+            if (response.status === 429) throw new Error("RATE_LIMIT");
+            throw new Error(`Status ${response.status} - ${errText}`);
+        }
+        return await response.json();
       } catch (err) {
-        if (i === retries - 1) throw err;
-        await new Promise((r) => setTimeout(r, delay));
-        delay *= 2;
+        if (err.message === "RATE_LIMIT") {
+            if (i === retries - 1) throw new Error("Google Limit hart erreicht. Bitte kurz warten.");
+            setProgressLabel("Google Limit. Kurze Pause (15s)...");
+            await new Promise(resolve => setTimeout(resolve, rateLimitDelay));
+            continue; 
+        }
+        if (i === retries - 1) throw new Error(`KI-Diagnose: ${err.message}`);
+        await new Promise(resolve => setTimeout(resolve, standardDelay));
       }
     }
   };
 
-  const parseJSONRobust = (text) => {
+  const parseJSON = (text) => {
     try {
-      const cleaned = text
-        .replace(/```json\n?/g, "")
-        .replace(/```/g, "")
-        .trim();
-      const parsed = JSON.parse(cleaned);
-      if (parsed.options && Array.isArray(parsed.options)) {
-        parsed.options = parsed.options.filter(
-          (o) => o && o.length > 1 && o !== "A" && o !== "B"
-        );
-      } else {
-        parsed.options = [];
-      }
-      return parsed;
-    } catch (e) {
-      return {
-        question: "Could you specify the core business objective?",
-        options: [],
-      };
+      const cleaned = text.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+      return JSON.parse(cleaned);
+    } catch (e) { 
+      const match = text.match(/\{[\s\S]*\}/);
+      try { return JSON.parse(match[0]); } catch(err) { return null; }
     }
   };
 
   const checkRelevance = async (text) => {
     try {
-      const res = await apiCall(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-        {
-          contents: [
-            {
-              parts: [
-                {
-                  text: `Analyze for business/IT relevance: "${text}". Reply ONLY "OK" or "QUATSCH".`,
-                },
-              ],
-            },
-          ],
-        }
-      );
-      return (
-        res.candidates?.[0]?.content?.parts?.[0]?.text
-          ?.trim()
-          ?.toUpperCase() === "QUATSCH"
-      );
-    } catch (e) {
-      return false;
-    }
-  };
-
-  const startInvestigation = async () => {
-    if (!input) return;
-    setLoading(true);
-    setSafetyTriggered(false);
-    setError(null);
-
-    if (await checkRelevance(input)) {
-      setSafetyTriggered(true);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const prompt = `Act as Inspector Columbo. Topic: "${input}". Persona: "${persona}".
-      Ask ONE short strategic question. JSON: {"question": "...", "options": ["Concrete Strategy 1", "Concrete Strategy 2"]}.
-      If input is vague, options must be empty []. Language: ${
-        language === "DE" ? "German" : "English"
-      }.`;
-
-      const result = await apiCall(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-        {
-          contents: [{ parts: [{ text: input }] }],
-          systemInstruction: { parts: [{ text: prompt }] },
-          generationConfig: { responseMimeType: "application/json" },
-        }
-      );
-      setColumboData(
-        parseJSONRobust(result.candidates[0].content.parts[0].text)
-      );
-      setActiveStep("columbo");
-    } catch (err) {
-      setError("Check failed. Connection issues.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const runContentEngine = async (type, answer) => {
-    const finalAnswer = answer || customAnswer || selectedAnswer;
-    if (type === "all") {
-      setActiveStep("generating");
-      setProgress(10);
-      setProgressLabel(`Tailoring for ${persona}...`);
-    }
-    setLoadingItems((prev) => ({
-      ...prev,
-      [type]: true,
-      ...(type === "all" && {
-        micro: true,
-        short: true,
-        medium: true,
-        long: true,
-        image: true,
-      }),
-    }));
-    setLoading(true);
-
-    try {
-      if (
-        type === "all" ||
-        ["micro", "short", "medium", "long"].includes(type)
-      ) {
-        const textPrompt = `B2B Expert for Persona: "${persona}". Topic: "${input}", Focus: "${finalAnswer}". 
-        Create 4 lengths: MICRO (<200 chars), SHORT (Hook), MEDIUM (Post), LONG (Deep-Dive). 
-        JSON: {"micro": "...", "short": "...", "medium": "...", "long": "...", "visual": "..."}. Language: ${language}.`;
-
-        const res = await apiCall(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-          {
-            contents: [{ parts: [{ text: finalAnswer }] }],
-            systemInstruction: { parts: [{ text: textPrompt }] },
-            generationConfig: { responseMimeType: "application/json" },
-          }
-        );
-        const data = parseJSONRobust(res.candidates[0].content.parts[0].text);
-        setPosts((prev) => ({
-          ...prev,
-          micro: data.micro || prev.micro,
-          short: data.short || prev.short,
-          medium: data.medium || prev.medium,
-          long: data.long || prev.long,
-          description: data.visual || prev.description,
-        }));
-      }
-
-      if (type === "all" || type === "image") {
-        const imgRes = await apiCall(
-          `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`,
-          {
-            instances: [
-              {
-                prompt: `Premium corporate visual for ${persona}, ${
-                  posts.description || "Enterprise architecture"
-                }, royal blue, vector style, white background.`,
-              },
-            ],
-          }
-        );
-        if (imgRes.predictions?.[0])
-          setPosts((prev) => ({
-            ...prev,
-            image: `data:image/png;base64,${imgRes.predictions[0].bytesBase64Encoded}`,
-          }));
-      }
-      setActiveStep("result");
-    } catch (err) {
-      setError("Generation failed.");
-    } finally {
-      setLoading(false);
-      setLoadingItems({
-        micro: false,
-        short: false,
-        medium: false,
-        long: false,
-        image: false,
+      const res = await apiCall({
+        contents: [{ parts: [{ text: `Analysiere auf B2B Relevanz: "${text}". Antworte AUSSCHLIESSLICH "OK" oder "QUATSCH".` }] }]
       });
-      setProgress(0);
-    }
+      return res.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toUpperCase() === "QUATSCH";
+    } catch (e) { return false; }
   };
 
-  const handleCustomColumboSubmit = () => {
-    if (!customAnswer.trim()) return;
-    runContentEngine("all", customAnswer);
+  const startResearch = async () => {
+    if (!targetCompany.trim()) { setError("Bitte Unternehmen oder Industrie hinzufügen."); return; }
+    if (campaignType === 'warm' && !warmContext.trim()) { setError("Bitte den Grund der Reaktivierung (Kontext) angeben."); return; }
+    
+    setActiveStep('generating');
+    setLoading(true); setProgress(5); setProgressLabel(`Scanne globale News & Impressum für ${targetCompany}...`); setError(null);
+
+    try {
+        const isQuatsch = await checkRelevance(targetCompany);
+        if (isQuatsch) {
+            setError("Nonsense erkannt. Bitte seriöses Unternehmen/Industrie eingeben.");
+            setLoading(false); setProgress(0); 
+            setActiveStep(campaignType === 'warm' ? 'input_warm' : 'input_cold'); 
+            return;
+        }
+
+        const prompt = `Du bist ein B2B Lead-Research Analyst. Führe eine Websuche für das Unternehmen oder die Industrie "${targetCompany}" durch.
+        Aufgabe 1: Finde die offizielle Adresse (Headquarter) und die zentrale Telefonnummer aus dem Impressum. (Bei Industrien gib "N/A" aus).
+        Aufgabe 2: Entwickle 3 hochaktuelle strategische Aufhänger (Angriffsvorschläge) für einen Pitch an ${persona}.
+        
+        REGEL: Antworte AUSSCHLIESSLICH mit rohem, gültigen JSON. Kein Markdown!
+        Format: {
+          "companyInfo": {"address": "...", "phone": "..."},
+          "topics": [{"title": "Dein Titel", "rationale": "Dein Schmerzpunkt/Relevanz"}],
+          "links": [{"title": "Headline der Quelle", "url": "https://..."}]
+        }`;
+
+        const result = await apiCall({ contents: [{ parts: [{ text: prompt }] }] }, true);
+        const parsed = parseJSON(result.candidates[0].content.parts[0].text);
+        
+        if (!parsed || !parsed.topics || !Array.isArray(parsed.topics) || parsed.topics.length === 0) {
+            throw new Error("Konnte keine Firmendaten oder News parsen.");
+        }
+
+        setCompanyData({
+            address: parsed.companyInfo?.address || "Adresse nicht eindeutig gefunden.",
+            phone: parsed.companyInfo?.phone || "Keine Telefonnummer gefunden.",
+            comments: ''
+        });
+
+        let sources = Array.isArray(parsed.links) ? parsed.links : [];
+        const grounding = result.candidates?.[0]?.groundingMetadata?.groundingAttributions;
+        if (grounding && Array.isArray(grounding)) {
+            const apiSources = grounding.map(a => ({ url: a.web?.uri, title: a.web?.title })).filter(s => s.url); 
+            sources = [...sources, ...apiSources];
+        }
+        sources = sources.filter((v, i, a) => a.findIndex(t => (t.url === v.url)) === i);
+
+        setResearchTopics(parsed.topics);
+        setGroundingSources(sources);
+        setActiveStep('topic_selection');
+    } catch (err) { 
+      setError(err.message || "Fehler bei der Live-Recherche."); 
+      setActiveStep(campaignType === 'warm' ? 'input_warm' : 'input_cold'); 
+    } 
+    finally { setLoading(false); setProgress(0); }
+  };
+
+  const runContentEngine = async (topic) => {
+    setSelectedTopic(topic);
+    setActiveStep('generating'); setProgress(10); setProgressLabel(`Synthetisiere Pitches & Predictive Logic für ${persona}...`); 
+    setLoadingItems({ pitch_direct: true, pitch_value: true, pitch_story: true, image: true });
+    setLoading(true); setError(null);
+
+    const sourcesText = groundingSources.length > 0 ? groundingSources.map((s, i) => `[${i+1}] ${s.url || s.uri}`).join("\n") : "Keine URLs verfügbar.";
+
+    try {
+      let contextSetup = "";
+      if (campaignType === 'cold') {
+          contextSetup = `DU MACHST KALTAKQUISE. Aufhänger für deine Nachricht ist AUSSCHLIESSLICH dieses News-Thema: "${topic.title} - ${topic.rationale}".`;
+      } else {
+          let warmText = "";
+          if (warmType === 'event') warmText = `Wir haben sie auf dem Event "${warmContext}" getroffen.`;
+          if (warmType === 'lost_deal') warmText = `Wir hatten einen Lost Deal wegen: "${warmContext}".`;
+          if (warmType === 'old_contact') warmText = `Letzter Kontakt: "${warmContext}".`;
+          
+          contextSetup = `DU REAKTIVIERST EINEN KONTAKT. 
+          HISTORIE: ${warmText}
+          ZIEL: Verbinde diese alte Historie extrem elegant mit dem brandaktuellen News-Thema: "${topic.title} - ${topic.rationale}".`;
+      }
+
+      const actionText = 
+        followUpAction === 'Telefonat' ? "Call-to-Action: Ein kurzes 10-Minuten-Telefonat zum Abgleich anbieten." :
+        followUpAction === 'Video' ? "Call-to-Action: Einen Videocall für einen Deep-Dive vorschlagen." :
+        "Call-to-Action: Eine provokante, offene Frage zur aktuellen IT-Architektur stellen.";
+
+      const textPrompt = `WICHTIG: Du bist ein Top-B2B-Sales-Experte von ELWIS. Dein Ziel ist die Akquise VON "${targetCompany}". DU BIST NICHT DIE FIRMA "${targetCompany}"! Du pitchst AN sie.
+      Ziel-Persona: "${persona}". Tonfall-Präferenz des Nutzers: "${tone}". 
+      ${actionText}
+      ${contextSetup}
+      Nutze diese Quellen für Fakten: ${sourcesText}
+
+      Erzeuge 3 unterschiedliche, kurze bis mittellange Outreach-Pitches (Cold Email Format):
+      1. "pitch_direct": Hard-Pitch. Direkt, auf den Punkt, fokussiert auf Schmerz und Lösung.
+      2. "pitch_value": Consultative-Pitch. Weicher, fokussiert auf Mehrwert und Sicherheit (IBM DNA).
+      3. "pitch_story": Narrative-Pitch. Greift News/Historie extrem stark auf und baut eine Story zu ELWIS.
+      
+      ZUSATZAUFGABE (PREDICTIVE LOGIC):
+      Bewerte für JEDEN dieser 3 Pitches realistisch die Erfolgswahrscheinlichkeit (Chance in %) bei der gewählten Persona ("${persona}") unter Berücksichtigung der Ausgangslage. Gib zudem einen extrem kurzen Satz als Begründung (z.B. "C-Level liebt nackte Zahlen" oder "Zu verspielt für IT-Leads").
+      
+      5. "visual": Englische Beschreibung für eine abstrakte B2B-Vektorgrafik (KEINE echten Firmennamen/Logos!).
+      
+      JSON FORMAT: 
+      {
+        "pitch_direct": {"text": "...", "chance": "85%", "reason": "..."},
+        "pitch_value": {"text": "...", "chance": "60%", "reason": "..."},
+        "pitch_story": {"text": "...", "chance": "40%", "reason": "..."},
+        "visual": "..."
+      }
+      Sprache: Deutsch.`;
+      
+      const res = await apiCall({ contents: [{ parts: [{ text: textPrompt }] }], generationConfig: { responseMimeType: "application/json" } });
+      const data = parseJSON(res.candidates[0].content.parts[0].text);
+      if(data) {
+          setPosts({ 
+              pitch_direct: data.pitch_direct || {text: "Fehler", chance: "0%", reason: ""}, 
+              pitch_value: data.pitch_value || {text: "Fehler", chance: "0%", reason: ""}, 
+              pitch_story: data.pitch_story || {text: "Fehler", chance: "0%", reason: ""}, 
+              description: data.visual, 
+              image: null 
+          });
+      }
+
+      generateImage(data ? data.visual : "Corporate business transformation data, abstract shapes");
+      setActiveStep('result');
+    } catch (err) { setError("Generierung fehlgeschlagen."); setActiveStep('topic_selection'); } 
+    finally { setLoading(false); setLoadingItems({ pitch_direct: false, pitch_value: false, pitch_story: false, image: true }); setProgress(0); }
+  };
+
+  const generateImage = async (overridePrompt = null) => {
+      setLoadingItems(prev => ({...prev, image: true}));
+      const promptToUse = overridePrompt || customImagePrompt || posts.description || "Corporate business abstract tech";
+      
+      try {
+        const payload = {
+            instances: [{ prompt: `Ultra-premium corporate business infographic, concept: ${promptToUse}, royal blue and dark slate theme, modern minimalist vector art, 8k. NO text, NO words, NO real brand logos, completely abstract.` }],
+            parameters: { sampleCount: 1 }
+        };
+        
+        let response;
+        for(let i=0; i<3; i++) {
+            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`, {
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if(response.ok) break;
+            await new Promise(r => setTimeout(r, 2000)); 
+        }
+        
+        if (!response.ok) throw new Error(`Bild-API blockiert`);
+        
+        const imgData = await response.json();
+        if (imgData.predictions && imgData.predictions[0]) {
+            setPosts(prev => ({ ...prev, image: `data:image/png;base64,${imgData.predictions[0].bytesBase64Encoded}` }));
+        }
+      } catch (err) { console.error("Bildgenerierung fehlgeschlagen:", err); } 
+      finally { setLoadingItems(prev => ({...prev, image: false})); }
   };
 
   const archiveAsset = async () => {
     setLoading(true);
     try {
-      const nameRes = await apiCall(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-        {
-          contents: [{ parts: [{ text: `2-word name for: "${input}".` }] }],
-        }
-      );
-      const name = nameRes.candidates[0].content.parts[0].text
-        .trim()
-        .replace(/ /g, "_");
-      setAssetLibrary([
-        {
-          id: Date.now(),
-          name,
-          ...posts,
-          topic: input,
-          date: new Date().toLocaleDateString(),
-          scheduledDate: scheduleDate,
-          persona,
-          lang: language,
-        },
-        ...assetLibrary,
-      ]);
-      setActiveStep("library");
-    } catch (err) {
-      setError("Save failed.");
-    } finally {
-      setLoading(false);
-    }
+      const name = `${targetCompany.replace(/[^a-zA-Z0-9]/g, "")}_${campaignType === 'warm' ? 'Warm' : 'Cold'}`.substring(0, 20) || "Kampagne";
+      const newAsset = { 
+          id: Date.now(), name: name, ...posts, topic: selectedTopic?.title || 'Unknown', scheduledDate: scheduleDate, 
+          persona, companySize: targetCompany, tone, sources: groundingSources, type: campaignType, 
+          companyAddress: companyData.address, companyPhone: companyData.phone, companyComments: companyData.comments,
+          date: new Date().toLocaleDateString() 
+      };
+      setAssetLibrary([newAsset, ...assetLibrary]);
+      setActiveStep('library');
+    } catch (err) { setError("Speichern fehlgeschlagen."); }
+    finally { setLoading(false); }
   };
 
-  // --- RENDER HELPERS ---
-  const ContentCard = ({ title, text, type, icon: Icon, color, charCount }) => (
-    <div className="bg-gray-900 border border-white/5 rounded-3xl p-6 relative flex flex-col h-full shadow-2xl">
-      <div className={`absolute top-0 left-0 w-1.5 h-full ${color}`}></div>
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-2">
-          <Icon size={14} className="text-gray-500" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-            {title}
-          </span>
-        </div>
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(text);
-            setCopiedType(type);
-            setTimeout(() => setCopiedType(null), 2000);
-          }}
-          className="p-2 hover:bg-white/5 rounded-full transition-all"
-        >
-          {copiedType === type ? (
-            <Check size={14} className="text-green-500" />
-          ) : (
-            <Copy size={14} className="text-gray-500" />
-          )}
-        </button>
-      </div>
-      <div className="bg-black/30 p-5 rounded-2xl border border-white/5 flex-1 relative overflow-hidden">
-        {loadingItems[type] && (
-          <div className="absolute inset-0 bg-gray-900/80 flex items-center justify-center z-10">
-            <Loader2 className="animate-spin text-blue-500" />
-          </div>
-        )}
-        <p
-          className={`text-gray-200 leading-relaxed ${
-            type === "micro" ? "font-bold text-lg italic" : "text-sm"
-          }`}
-        >
-          {text || "..."}
-        </p>
-        {charCount && (
-          <div className="mt-2 text-[8px] font-bold text-gray-600 text-right uppercase">
-            {text.length} / 200
-          </div>
-        )}
-      </div>
-      <button
-        onClick={() => runContentEngine(type, selectedAnswer)}
-        className="mt-4 w-full py-3 bg-white/5 hover:bg-blue-600/20 text-gray-400 rounded-xl text-[8px] font-black uppercase transition-all"
-      >
-        Regenerate
-      </button>
-    </div>
+  const HorizontalButton = ({ active, onClick, icon: Icon, label }) => (
+    <button 
+        onClick={onClick}
+        className={`flex-1 flex items-center justify-center gap-2 py-4 px-3 rounded-2xl border-2 transition-all duration-300 ${active ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] scale-105 z-10' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600 hover:bg-slate-800'}`}
+    >
+        <Icon size={16} className={active ? 'text-white' : 'text-slate-500'} />
+        <span className="font-bold text-[11px] uppercase tracking-widest truncate">{label}</span>
+    </button>
   );
 
+  // Angepasste ContentCard, die nun die Text/Chance/Reason Logik verarbeitet
+  const ContentCard = ({ title, pitchData, type, icon: Icon, color }) => {
+    const text = pitchData?.text || "Warte auf Engine...";
+    const chance = pitchData?.chance || "N/A";
+    const reason = pitchData?.reason || "";
+    
+    // Einfache Logik, um die Farbe basierend auf der %-Zahl anzupassen (wenn möglich)
+    const numChance = parseInt(chance.replace('%', '')) || 0;
+    const chanceColor = numChance > 70 ? 'text-green-400' : numChance > 40 ? 'text-amber-400' : 'text-red-400';
+
+    return (
+      <div className="bg-[#0F172A] border border-slate-800 rounded-[2.5rem] p-6 md:p-8 relative flex flex-col h-full shadow-2xl transition-all hover:border-blue-500/40 group w-full min-w-0">
+        <div className={`absolute top-0 left-0 w-2 h-full ${color} rounded-l-[2.5rem]`}></div>
+        <div className="flex justify-between items-center mb-4 pl-4 border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-3 min-w-0">
+              <Icon size={18} className="text-slate-400 flex-shrink-0" />
+              <span className="text-[11px] font-black uppercase tracking-widest text-slate-400 truncate">{title}</span>
+          </div>
+          <button onClick={() => {navigator.clipboard.writeText(text); setCopiedType(type); setTimeout(()=>setCopiedType(null), 2000)}} className="p-3 bg-slate-800 rounded-full hover:bg-slate-700 transition-all text-slate-300 flex-shrink-0">
+            {copiedType === type ? <Check size={18} className="text-green-400" /> : <Copy size={18} />}
+          </button>
+        </div>
+
+        {/* NEU: PREDICTIVE LOGIC UI */}
+        {chance !== "N/A" && !loadingItems[type] && (
+            <div className="mb-4 pl-4 flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                    <Activity size={14} className={chanceColor} />
+                    <span className={`text-xs font-black uppercase tracking-widest ${chanceColor}`}>Win-Rate: {chance}</span>
+                </div>
+                <span className="text-[10px] text-slate-500 italic opacity-80">{reason}</span>
+            </div>
+        )}
+
+        <div className="bg-black/50 p-6 rounded-3xl border border-slate-800 flex-1 overflow-y-auto relative ml-4 min-h-[150px]">
+          {loadingItems[type] && <div className="absolute inset-0 bg-[#0F172A]/90 flex items-center justify-center z-10 rounded-3xl"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}
+          <p className="text-slate-200 leading-relaxed whitespace-pre-wrap break-words text-sm">{text}</p>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-black text-gray-200 font-sans selection:bg-blue-600/30 overflow-x-hidden">
+    <div className="min-h-screen w-full bg-[#020617] text-slate-200 font-sans selection:bg-blue-600/40 overflow-x-hidden">
+      
       {zoomedImage && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/98 flex items-center justify-center p-4 animate-in fade-in"
-          onClick={() => setZoomedImage(null)}
-        >
-          <img
-            src={zoomedImage}
-            className="max-w-full max-h-full object-contain rounded-3xl border border-white/10"
-            alt="Preview"
-          />
+        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-6 animate-in fade-in" onClick={() => setZoomedImage(null)}>
+          <button className="absolute top-8 right-8 text-white/50 hover:text-white p-2 bg-white/10 rounded-full transition-all"><X size={32}/></button>
+          <img src={zoomedImage} className="max-w-full max-h-full object-contain rounded-2xl border border-slate-800 shadow-2xl" alt="Preview" />
         </div>
       )}
 
-      <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/5 p-4 md:px-10 flex justify-between items-center shadow-2xl">
-        <div className="flex items-center gap-5">
-          {activeStep !== "input" && (
-            <button
-              onClick={() => setActiveStep("input")}
-              className="p-2 bg-white/5 rounded-full text-blue-400 active:scale-90"
-            >
-              <RotateCcw size={18} />
-            </button>
-          )}
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-600/30">
-              <Zap size={20} className="fill-white text-white" />
-            </div>
-            <div className="flex flex-col">
-              <h1 className="text-sm font-black uppercase tracking-[0.2em] text-white">
-                ELWIS LAB
-              </h1>
-              <span className="text-[8px] font-bold text-gray-500 uppercase tracking-widest leading-none">
-                v16.2 | ALPHA ROLLOUT
-              </span>
-            </div>
+      <header className="sticky top-0 z-50 bg-[#020617]/95 backdrop-blur-xl border-b border-slate-800 p-5 px-6 md:px-10 flex justify-between items-center w-full shadow-2xl">
+        <div className="flex items-center gap-6">
+          {activeStep !== 'campaign_select' && <button onClick={resetEngine} className="p-3 bg-slate-800 rounded-full text-blue-400 hover:bg-slate-700 active:scale-95 transition-all"><RotateCcw size={20}/></button>}
+          <div className="flex flex-col">
+            <h1 className="text-sm font-black uppercase tracking-[0.4em] text-white italic">ELWIS LAB</h1>
+            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v44.0 | PREDICTIVE ENGINE</span>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex bg-white/5 p-1 rounded-lg border border-white/5">
-            {["DE", "EN"].map((l) => (
-              <button
-                key={l}
-                onClick={() => setLanguage(l)}
-                className={`px-3 py-1 rounded text-[10px] font-black transition-all ${
-                  language === l
-                    ? "bg-blue-600 text-white shadow-xl"
-                    : "opacity-30"
-                }`}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => setActiveStep("library")}
-            className="p-2.5 bg-white/5 rounded-xl border border-white/5 relative"
-          >
-            <CalendarDays size={18} />
-            {assetLibrary.length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-blue-600 rounded-full text-[8px] flex items-center justify-center font-bold border border-black">
-                {assetLibrary.length}
-              </span>
-            )}
-          </button>
-        </div>
+        <button onClick={() => setActiveStep('library')} className="p-4 bg-slate-800 rounded-2xl border border-slate-700 relative hover:bg-slate-700 transition-all">
+          <CalendarDays size={20} className="text-white" />
+          {assetLibrary.length > 0 && <span className="absolute -top-2 -right-2 w-6 h-6 bg-blue-500 rounded-full text-[10px] flex items-center justify-center font-black border-2 border-[#020617] shadow-lg text-white">{assetLibrary.length}</span>}
+        </button>
       </header>
 
-      <main className="max-w-7xl mx-auto p-4 md:p-10">
-        {/* INPUT */}
-        {activeStep === "input" && (
-          <div className="max-w-2xl mx-auto space-y-12 animate-in slide-in-from-bottom-10 pt-10">
+      <main className="max-w-[1400px] mx-auto p-4 md:p-8 lg:p-10 w-full flex flex-col flex-1">
+        
+        {/* === STEP 0: CAMPAIGN ROUTER === */}
+        {activeStep === 'campaign_select' && (
+          <div className="max-w-5xl mx-auto w-full space-y-16 animate-in slide-in-from-bottom-10 pt-20 flex-1 pb-40">
             <div className="text-center space-y-6">
-              <div className="inline-flex items-center gap-2 bg-blue-500/10 text-blue-400 px-5 py-1.5 rounded-full border border-blue-500/20 mb-4 animate-pulse">
-                <ShieldCheck size={12} />{" "}
-                <span className="text-[9px] font-black uppercase tracking-widest italic">
-                  Marketing Architecture
-                </span>
-              </div>
-              <h2 className="text-7xl font-black text-white leading-none tracking-tighter uppercase italic">
-                The Studio.
-              </h2>
+                <div className="inline-flex items-center gap-3 bg-blue-900/30 text-blue-400 px-6 py-2 rounded-full border border-blue-500/30 mb-2 shadow-[0_0_15px_rgba(37,99,235,0.2)]"><Rocket size={16} /> <span className="text-[11px] font-black uppercase tracking-[0.3em] italic">Campaign Initialization</span></div>
+                <h2 className="text-5xl md:text-8xl font-black text-white leading-none tracking-tighter uppercase italic text-center">Wähle deinen <br/>Angriffsvektor.</h2>
             </div>
-
-            <div className="bg-gray-900/60 backdrop-blur-md p-6 rounded-[4rem] border border-white/5 space-y-8 shadow-3xl">
-              <div className="grid grid-cols-3 gap-3 p-1.5 bg-black/30 rounded-2xl">
-                {[
-                  { id: "Executive", l: "C-Level" },
-                  { id: "Expert", l: "Experts" },
-                  { id: "User", l: "Users" },
-                ].map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setPersona(p.id)}
-                    className={`py-4 rounded-xl font-black text-[9px] uppercase transition-all ${
-                      persona === p.id
-                        ? "bg-blue-600 text-white shadow-xl"
-                        : "text-gray-500 hover:bg-white/5"
-                    }`}
-                  >
-                    {p.l}
-                  </button>
-                ))}
-              </div>
-
-              {safetyTriggered ? (
-                <div className="p-16 text-center space-y-6">
-                  <ShieldAlert size={60} className="text-red-500 mx-auto" />
-                  <p className="text-red-400 font-bold italic text-lg leading-tight">
-                    I don't follow your briefing. Please define a business
-                    topic.
-                  </p>
-                  <button
-                    onClick={() => setSafetyTriggered(false)}
-                    className="px-10 py-4 bg-white text-black rounded-full font-black text-xs uppercase"
-                  >
-                    Retry
-                  </button>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div onClick={() => { setCampaignType('cold'); setActiveStep('input_cold'); }} className="bg-[#0F172A] p-10 md:p-12 rounded-[4rem] border-4 border-slate-800 hover:border-blue-600 shadow-2xl hover:shadow-[0_0_50px_rgba(37,99,235,0.3)] transition-all cursor-pointer group relative overflow-hidden flex flex-col items-center text-center gap-8">
+                    <div className="absolute -right-10 -top-10 bg-blue-600/10 w-64 h-64 rounded-full blur-[80px] group-hover:bg-blue-600/20 transition-all"></div>
+                    <div className="p-8 bg-black/50 rounded-full border-2 border-slate-800 group-hover:scale-110 transition-transform"><Search size={64} className="text-blue-500" /></div>
+                    <div>
+                        <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight mb-4">1) Kaltakquise</h3>
+                        <p className="text-slate-400 text-xs md:text-sm leading-relaxed">Identifiziere neue Ziele. Die KI führt eine Live-Recherche durch, zieht Impressumsdaten und generiert News-basierte Eisbrecher.</p>
+                    </div>
                 </div>
-              ) : (
-                <>
-                  <textarea
-                    className="w-full h-56 p-8 bg-transparent outline-none text-xl text-center font-bold text-white placeholder:text-gray-800 resize-none"
-                    placeholder="Enter topic or URL..."
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                  />
-                  <button
-                    onClick={startInvestigation}
-                    disabled={loading || !input}
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white py-12 rounded-[3rem] font-black text-xs uppercase tracking-[0.4em] shadow-2xl flex items-center justify-center gap-4 transition-all active:scale-[0.98]"
-                  >
-                    {loading ? (
-                      <Loader2 className="animate-spin" />
-                    ) : (
-                      <Sparkles size={20} />
-                    )}{" "}
-                    INITIATE LAB
-                  </button>
-                </>
-              )}
+
+                <div onClick={() => { setCampaignType('warm'); setActiveStep('input_warm'); }} className="bg-[#0F172A] p-10 md:p-12 rounded-[4rem] border-4 border-slate-800 hover:border-purple-600 shadow-2xl hover:shadow-[0_0_50px_rgba(147,51,234,0.3)] transition-all cursor-pointer group relative overflow-hidden flex flex-col items-center text-center gap-8">
+                    <div className="absolute -left-10 -bottom-10 bg-purple-600/10 w-64 h-64 rounded-full blur-[80px] group-hover:bg-purple-600/20 transition-all"></div>
+                    <div className="p-8 bg-black/50 rounded-full border-2 border-slate-800 group-hover:scale-110 transition-transform"><Users size={64} className="text-purple-500" /></div>
+                    <div>
+                        <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight mb-4">2) Reaktivierung</h3>
+                        <p className="text-slate-400 text-xs md:text-sm leading-relaxed">Aktiviere Bestandskontakte. Verbinde die Historie (Messe, Lost Deal) intelligent mit tagesaktuellen News.</p>
+                    </div>
+                </div>
             </div>
           </div>
         )}
 
-        {/* COLUMBO */}
-        {activeStep === "columbo" && (
-          <div className="max-w-2xl mx-auto animate-in zoom-in duration-500">
-            <div className="bg-gray-900 rounded-[4rem] shadow-3xl overflow-hidden relative border border-white/5">
-              <div className="relative h-[22rem] w-full overflow-hidden border-b-4 border-blue-600">
-                <img
-                  src={columboImageUrl}
-                  alt="Columbo"
-                  className="w-full h-full object-cover grayscale brightness-75 contrast-125"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent opacity-95"></div>
-              </div>
-              <div className="p-10 -mt-20 relative bg-black/95 backdrop-blur-2xl rounded-t-[4rem] text-center space-y-10">
-                <div className="inline-block bg-white px-8 py-4 rounded-2xl shadow-2xl text-black font-black italic">
-                  Just one more thing...
+        {/* === STEP 1A: COLD OUTREACH INPUT === */}
+        {activeStep === 'input_cold' && (
+          <div className="max-w-4xl mx-auto w-full space-y-12 animate-in slide-in-from-right-10 pt-10 flex-1 pb-40">
+            <div className="text-center space-y-5">
+                <div className="inline-flex items-center gap-3 bg-blue-900/30 text-blue-400 px-6 py-2 rounded-full border border-blue-500/30 mb-2"><Search size={16} /> <span className="text-[11px] font-black uppercase tracking-[0.3em] italic">Intelligence Module: Kaltakquise</span></div>
+                <h2 className="text-5xl md:text-7xl font-black text-white leading-none tracking-tighter uppercase italic text-center">Target Lock.</h2>
+            </div>
+            
+            <div className="bg-[#0F172A] p-6 md:p-12 rounded-[3rem] md:rounded-[4rem] border border-slate-800 shadow-2xl space-y-12 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full blur-[100px]"></div>
+                
+                <div className="space-y-4 relative z-10">
+                    <p className="text-[10px] md:text-[12px] font-black text-slate-500 uppercase tracking-[0.4em] pl-4">1) Personenkreis</p>
+                    <div className="flex flex-col sm:flex-row gap-4 w-full">
+                        <HorizontalButton active={persona === 'Geschäftsführung'} onClick={() => setPersona('Geschäftsführung')} icon={Briefcase} label="C-Level" />
+                        <HorizontalButton active={persona === 'Tech Lead'} onClick={() => setPersona('Tech Lead')} icon={Network} label="Tech Lead" />
+                        <HorizontalButton active={persona === 'Betriebsleiter'} onClick={() => setPersona('Betriebsleiter')} icon={Target} label="Ops Manager" />
+                    </div>
                 </div>
-                <p className="text-2xl font-bold text-white italic border-l-4 border-blue-600 pl-8 text-left leading-relaxed">
-                  "{columboData.question}"
-                </p>
-                <div className="grid grid-cols-1 gap-4">
-                  {columboData.options &&
-                    columboData.options.length > 0 &&
-                    columboData.options.map((opt, i) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          setSelectedAnswer(opt);
-                          runContentEngine("all", opt);
-                        }}
-                        className="bg-white/5 hover:bg-blue-600 text-white p-6 rounded-[2rem] text-xs font-black transition-all border border-white/5 flex items-center justify-between group px-12"
-                      >
-                        {opt}{" "}
-                        <ChevronRight
-                          size={20}
-                          className="opacity-0 group-hover:opacity-100 transition-all"
+
+                <div className="space-y-4 relative z-10">
+                    <label className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-500 block pl-4">2) Unternehmen / Industrie</label>
+                    <div className="relative">
+                        <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={24} />
+                        <input type="text" className="w-full p-6 md:p-8 pl-16 bg-black border-2 border-slate-800 rounded-[2.5rem] outline-none text-xl md:text-2xl font-black text-white placeholder:text-slate-700 focus:border-blue-600 transition-all shadow-inner uppercase tracking-wide" placeholder="Bitte Unternehmen oder Industrie hinzufügen..." value={targetCompany} onChange={(e) => setTargetCompany(e.target.value)} />
+                    </div>
+                </div>
+
+                <div className="space-y-4 relative z-10 pt-4 border-t border-slate-800">
+                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.3em] pl-4">Tonfall (Wichtig für KI-Schätzung)</p>
+                    <div className="flex flex-col sm:flex-row gap-4 w-full">
+                        <HorizontalButton active={tone === 'Analytisch'} onClick={() => setTone('Analytisch')} icon={BarChart3} label="Analytisch" />
+                        <HorizontalButton active={tone === 'Visionär'} onClick={() => setTone('Visionär')} icon={Lightbulb} label="Visionär" />
+                        <HorizontalButton active={tone === 'Direkt'} onClick={() => setTone('Direkt')} icon={Crosshair} label="Knallhart" />
+                    </div>
+                </div>
+
+                <button onClick={startResearch} disabled={loading || !targetCompany.trim()} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-8 md:py-10 rounded-[3.5rem] font-black text-sm md:text-lg uppercase tracking-[0.4em] shadow-[0_20px_50px_-10px_rgba(37,99,235,0.5)] flex items-center justify-center gap-4 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none relative z-20 mt-8">
+                  {loading ? <Loader2 className="animate-spin" size={28} /> : <Zap size={28} />} LET'S GO !
+                </button>
+            </div>
+          </div>
+        )}
+
+        {/* === STEP 1B: WARM OUTREACH INPUT === */}
+        {activeStep === 'input_warm' && (
+          <div className="max-w-4xl mx-auto w-full space-y-12 animate-in slide-in-from-left-10 pt-10 flex-1 pb-40">
+            <div className="text-center space-y-5">
+                <div className="inline-flex items-center gap-3 bg-purple-900/30 text-purple-400 px-6 py-2 rounded-full border border-purple-500/30 mb-2"><Users size={16} /> <span className="text-[11px] font-black uppercase tracking-[0.3em] italic">Intelligence Module: Reaktivierung</span></div>
+                <h2 className="text-5xl md:text-7xl font-black text-white leading-none tracking-tighter uppercase italic text-center">Re-Engagement.</h2>
+            </div>
+            
+            <div className="bg-[#0F172A] p-6 md:p-12 rounded-[3rem] md:rounded-[4rem] border border-slate-800 shadow-2xl space-y-10 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600/5 rounded-full blur-[100px]"></div>
+                
+                <div className="space-y-4 relative z-10">
+                    <p className="text-[10px] md:text-[12px] font-black text-slate-500 uppercase tracking-[0.4em] pl-4">1) Personenkreis</p>
+                    <div className="flex flex-col sm:flex-row gap-4 w-full">
+                        <HorizontalButton active={persona === 'Geschäftsführung'} onClick={() => setPersona('Geschäftsführung')} icon={Briefcase} label="C-Level" />
+                        <HorizontalButton active={persona === 'Tech Lead'} onClick={() => setPersona('Tech Lead')} icon={Network} label="Tech Lead" />
+                        <HorizontalButton active={persona === 'Betriebsleiter'} onClick={() => setPersona('Betriebsleiter')} icon={Target} label="Ops Manager" />
+                    </div>
+                </div>
+
+                <div className="space-y-4 relative z-10">
+                    <label className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-500 block pl-4">2) Unternehmen / Industrie</label>
+                    <div className="relative">
+                        <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={24} />
+                        <input type="text" className="w-full p-6 md:p-8 pl-16 bg-black border-2 border-slate-800 rounded-[2.5rem] outline-none text-xl md:text-2xl font-black text-white placeholder:text-slate-700 focus:border-purple-600 transition-all shadow-inner uppercase tracking-wide" placeholder="Bitte Unternehmen oder Industrie hinzufügen..." value={targetCompany} onChange={(e) => setTargetCompany(e.target.value)} />
+                    </div>
+                </div>
+
+                <div className="pt-8 border-t border-slate-800 relative z-10 space-y-8">
+                    <div className="space-y-4">
+                        <p className="text-[10px] font-black text-purple-400 uppercase tracking-[0.5em] pl-4 flex items-center gap-2"><AlertTriangle size={14}/> Zwingend für die Reaktivierung</p>
+                        <div className="flex flex-col md:flex-row gap-4 w-full">
+                            <HorizontalButton active={warmType === 'event'} onClick={() => setWarmType('event')} icon={MapPin} label="Messe / Event" />
+                            <HorizontalButton active={warmType === 'lost_deal'} onClick={() => setWarmType('lost_deal')} icon={History} label="Lost Opportunity" />
+                            <HorizontalButton active={warmType === 'old_contact'} onClick={() => setWarmType('old_contact')} icon={RefreshCcw} label="Alter Kontakt" />
+                        </div>
+                    </div>
+                    <div className="relative">
+                        {warmType === 'event' && <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={20} />}
+                        {warmType === 'lost_deal' && <History className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={20} />}
+                        {warmType === 'old_contact' && <RefreshCcw className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500" size={20} />}
+                        <input type="text" className="w-full p-6 pl-14 bg-black border-2 border-slate-800 rounded-3xl outline-none text-lg font-bold text-white placeholder:text-slate-700 focus:border-purple-600 transition-all shadow-inner" 
+                            placeholder={
+                                warmType === 'event' ? "Welche Messe? Z.B. OMR 2026..." : 
+                                warmType === 'lost_deal' ? "Warum verloren? Z.B. Budget..." : 
+                                "Kontext? Z.B. Projekt X vor 2 Jahren..."
+                            } 
+                            value={warmContext} onChange={(e) => setWarmContext(e.target.value)} 
                         />
-                      </button>
-                    ))}
-                  <div className="space-y-4 mt-8 pt-8 border-t border-white/10">
-                    <textarea
-                      className="w-full p-8 bg-white/5 border border-white/10 rounded-[2rem] font-bold outline-none text-white focus:border-blue-600 transition-all h-32"
-                      placeholder="Custom context..."
-                      value={customAnswer}
-                      onChange={(e) => setCustomAnswer(e.target.value)}
-                    />
-                    <button
-                      onClick={handleCustomColumboSubmit}
-                      disabled={loading || !customAnswer}
-                      className="w-full bg-white text-black py-8 rounded-[2.5rem] font-black uppercase text-xs flex items-center justify-center gap-5 hover:scale-[1.02] shadow-2xl active:scale-95 transition-all"
-                    >
-                      {loading ? (
-                        <Loader2 className="animate-spin" />
-                      ) : (
-                        <Send size={20} />
-                      )}{" "}
-                      SEND EVIDENCE
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* LOADING */}
-        {activeStep === "generating" && (
-          <div className="max-w-md mx-auto py-40 space-y-12 text-center animate-in fade-in">
-            <div className="relative inline-flex items-center justify-center scale-150 mb-8">
-              <div className="w-20 h-20 border-[4px] border-blue-500/10 rounded-full border-t-blue-600 animate-spin" />
-              <Zap
-                size={24}
-                className="absolute m-auto text-blue-500 fill-blue-500 animate-pulse"
-              />
-            </div>
-            <h2 className="text-2xl font-black uppercase italic tracking-[0.2em]">
-              {progressLabel}
-            </h2>
-            <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden border border-white/5 shadow-inner">
-              <div
-                className="h-full bg-blue-600 rounded-full transition-all duration-700"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <p className="text-[10px] font-black text-gray-600 uppercase tracking-[0.5em]">
-              {Math.round(progress)}% Complete
-            </p>
-          </div>
-        )}
-
-        {/* RESULT */}
-        {activeStep === "result" && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in zoom-in pb-24">
-            <div className="lg:col-span-7 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ContentCard
-                  title="Micro Bullet"
-                  text={posts.micro}
-                  type="micro"
-                  icon={MessageCircle}
-                  color="bg-blue-400"
-                  charCount={true}
-                />
-                <ContentCard
-                  title="KISS Post"
-                  text={posts.short}
-                  type="short"
-                  icon={AlignLeft}
-                  color="bg-blue-600"
-                />
-              </div>
-              <ContentCard
-                title="Standard Post"
-                text={posts.medium}
-                type="medium"
-                icon={AlignCenter}
-                color="bg-gray-400"
-              />
-              <ContentCard
-                title="Strategic Deep-Dive"
-                text={posts.long}
-                type="long"
-                icon={AlignJustify}
-                color="bg-white/20"
-              />
-            </div>
-
-            <div className="lg:col-span-5 flex flex-col gap-8">
-              <div className="bg-gray-900 p-8 rounded-[4rem] shadow-3xl border border-white/5">
-                <div className="flex justify-between items-center mb-6 px-2 text-[10px] font-black uppercase text-gray-500">
-                  <span>Brand Visual</span>
-                  <button
-                    onClick={() => runContentEngine("image", selectedAnswer)}
-                    className="p-2 bg-white/5 rounded-full hover:bg-blue-600 transition-all"
-                  >
-                    <RefreshCw size={14} />
-                  </button>
-                </div>
-                <div
-                  className="aspect-square bg-black/40 rounded-[3rem] overflow-hidden flex items-center justify-center border-4 border-gray-800 shadow-2xl relative group cursor-zoom-in mb-8"
-                  onClick={() => posts.image && setZoomedImage(posts.image)}
-                >
-                  {loadingItems.image && (
-                    <div className="absolute inset-0 bg-gray-900/90 flex items-center justify-center z-20">
-                      <Loader2
-                        className="animate-spin text-blue-500"
-                        size={40}
-                      />
                     </div>
-                  )}
-                  {posts.image ? (
-                    <img
-                      src={posts.image}
-                      alt="Visual"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    />
-                  ) : (
-                    <Loader2 className="animate-spin text-blue-400" />
-                  )}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600/10">
-                    <Maximize2 size={32} className="text-white" />
-                  </div>
                 </div>
-                <div className="bg-white/5 p-5 rounded-[2rem] border border-white/5 mb-6 space-y-4">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-gray-500 px-1 flex items-center gap-2">
-                    <CalendarDays size={12} /> Publish Date
-                  </label>
-                  <input
-                    type="date"
-                    value={scheduleDate}
-                    onChange={(e) => setScheduleDate(e.target.value)}
-                    className="w-full p-4 bg-black/30 border border-white/10 rounded-2xl text-white outline-none text-xs"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={archiveAsset}
-                    disabled={loading}
-                    className="py-7 bg-green-600 text-white rounded-[2.5rem] font-black text-[10px] uppercase shadow-2xl hover:bg-green-500 transition-all active:scale-95 flex items-center justify-center gap-2"
-                  >
-                    <Save size={18} /> SAVE
-                  </button>
-                  <button
-                    onClick={() => setActiveStep("library")}
-                    className="py-7 bg-blue-600 text-white rounded-[2.5rem] font-black text-[10px] uppercase shadow-2xl hover:bg-blue-500 active:scale-95 flex items-center justify-center gap-2"
-                  >
-                    <Library size={18} /> VAULT
-                  </button>
-                </div>
-              </div>
-              <div className="bg-gradient-to-br from-gray-900 to-black p-10 rounded-[3.5rem] border border-white/5 shadow-3xl text-center space-y-4 relative overflow-hidden group">
-                <div className="absolute -right-10 -bottom-10 opacity-[0.03] group-hover:scale-110 transition-transform rotate-12">
-                  <Rocket size={200} />
-                </div>
-                <h4 className="text-lg font-black text-white italic tracking-tighter uppercase">
-                  King of Leads
-                </h4>
-                <p className="text-[10px] text-gray-500 leading-relaxed font-medium italic opacity-60">
-                  Deployment phase starts Q2 2026. Global scale roadmap
-                  initiated.
-                </p>
-              </div>
+
+                <button onClick={startResearch} disabled={loading || !targetCompany.trim() || !warmContext.trim()} className="w-full bg-purple-600 hover:bg-purple-500 text-white py-8 md:py-10 rounded-[3.5rem] font-black text-sm md:text-lg uppercase tracking-[0.4em] shadow-[0_20px_50px_-10px_rgba(147,51,234,0.5)] flex items-center justify-center gap-4 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none relative z-20 mt-8">
+                  {loading ? <Loader2 className="animate-spin" size={28} /> : <Zap size={28} />} LET'S GO !
+                </button>
             </div>
           </div>
         )}
 
-        {/* VAULT */}
-        {activeStep === "library" && (
-          <div className="space-y-12 animate-in slide-in-from-right-16 pb-32">
-            <div className="flex justify-between items-end px-4">
-              <div>
-                <h2 className="text-6xl font-black uppercase italic tracking-tighter text-white leading-none">
-                  The Vault.
-                </h2>
-                <p className="text-gray-500 text-[11px] font-bold uppercase tracking-[0.5em] mt-3">
-                  Repository (In-Memory Alpha)
-                </p>
-              </div>
-              <button
-                onClick={() => setActiveStep("input")}
-                className="bg-white text-black px-10 py-4 rounded-full text-[10px] font-black uppercase shadow-3xl hover:scale-105 active:scale-95 transition-all"
-              >
-                Studio Return
-              </button>
-            </div>
-            {assetLibrary.length === 0 ? (
-              <div className="bg-gray-900 p-40 rounded-[6rem] text-center border-4 border-dashed border-white/5 flex flex-col items-center shadow-inner">
-                <Library size={60} className="text-gray-800 mb-8" />
-                <p className="text-gray-600 font-black uppercase tracking-[0.5em] text-xs">
-                  The vault is empty.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-10 border-l-2 border-blue-900/50 pl-8 ml-2">
-                {assetLibrary
-                  .sort(
-                    (a, b) =>
-                      new Date(a.scheduledDate) - new Date(b.scheduledDate)
-                  )
-                  .map((item) => (
-                    <div key={item.id} className="relative">
-                      <div className="absolute -left-[2.25rem] top-10 w-5 h-5 bg-blue-600 rounded-full border-4 border-black shadow-lg shadow-blue-500/30"></div>
-                      <div className="bg-gray-900 rounded-[3.5rem] border border-white/5 overflow-hidden flex flex-col hover:-translate-y-2 transition-all duration-500 shadow-2xl">
-                        <div className="p-6 bg-black/40 text-white flex justify-between items-center">
-                          <div className="flex items-center gap-4 flex-1">
-                            <div className="bg-blue-600/20 text-blue-400 px-3 py-1.5 rounded-lg border border-blue-500/20 flex items-center gap-2">
-                              <Clock size={12} />{" "}
-                              <span className="text-[9px] font-black uppercase tracking-widest">
-                                {item.scheduledDate || "DRAFT"}
-                              </span>
+        {/* === STEP 2: DOSSIER & TOPIC SELECTION === */}
+        {activeStep === 'topic_selection' && (
+          <div className="w-full animate-in zoom-in duration-500 flex-1 pb-32 pt-4 flex flex-col lg:flex-row gap-8">
+            
+            {/* SPALTE LINKS: FIRMEN-DOSSIER */}
+            <div className="w-full lg:w-1/3 flex flex-col gap-6">
+                <div className="bg-[#0F172A] border border-slate-800 rounded-[3rem] p-8 shadow-2xl flex flex-col h-full relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-slate-800/50 rounded-full blur-[50px]"></div>
+                    <h2 className="text-xl font-black text-white uppercase tracking-widest border-b border-slate-800 pb-4 mb-6 flex items-center gap-3">
+                        <Building2 size={20} className="text-blue-500"/> Firmen-Dossier
+                    </h2>
+                    
+                    <div className="space-y-6 flex-1 relative z-10">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 flex items-center gap-2"><MapPin size={12}/> Zentrale (Impressum)</label>
+                            <p className="text-sm font-medium text-slate-300 bg-black/50 p-4 rounded-2xl border border-slate-800 leading-relaxed">{companyData.address || 'Keine Adresse gefunden.'}</p>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 flex items-center gap-2"><Phone size={12}/> Telefon</label>
+                            <div className="flex items-center gap-3">
+                                <p className="text-lg font-bold text-white bg-black/50 px-4 py-3 rounded-2xl border border-slate-800 flex-1 truncate">{companyData.phone || 'N/A'}</p>
+                                {companyData.phone && companyData.phone !== 'N/A' && (
+                                    <button onClick={() => navigator.clipboard.writeText(companyData.phone)} className="p-4 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-2xl transition-colors"><Copy size={18}/></button>
+                                )}
                             </div>
-                            <span className="text-[12px] font-black uppercase tracking-[0.1em] truncate opacity-90">
-                              {item.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 ml-4">
-                            <span className="text-[8px] bg-blue-600 text-white px-2 py-0.5 rounded-md font-black uppercase">
-                              {item.persona}
-                            </span>
-                            <button
-                              onClick={() =>
-                                setAssetLibrary(
-                                  assetLibrary.filter((a) => a.id !== item.id)
-                                )
-                              }
-                              className="text-white/10 hover:text-red-500 transition-all hover:scale-110"
-                            >
-                              <Trash2 size={16} />
+                        </div>
+                        <div className="space-y-2 flex-1 flex flex-col">
+                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 flex items-center gap-2"><StickyNote size={12}/> Analysten-Kommentare</label>
+                            <textarea 
+                                className="w-full flex-1 min-h-[120px] p-4 bg-slate-900 border-2 border-slate-800 rounded-2xl text-slate-300 outline-none text-sm focus:border-blue-600 transition-colors resize-none"
+                                placeholder="Eigene Notizen hier eintragen... (Werden gespeichert)"
+                                value={companyData.comments}
+                                onChange={(e) => setCompanyData({...companyData, comments: e.target.value})}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* SPALTE RECHTS: ANGRIFFSVORSCHLÄGE */}
+            <div className="w-full lg:w-2/3 flex flex-col gap-6">
+                <div className="mb-4 space-y-2">
+                    <h2 className={`text-2xl md:text-3xl font-black text-white italic tracking-tighter uppercase border-l-8 pl-6 ${campaignType === 'warm' ? 'border-purple-600' : 'border-blue-600'}`}>
+                        Aktuelle Themen für den Angriff
+                    </h2>
+                    <p className="text-slate-400 pl-8 text-sm">Wähle eines dieser 3 aktuellen News-Themen aus der Recherche, um die Pitch-Matrix zu generieren.</p>
+                </div>
+
+                <div className="grid gap-5">
+                    {researchTopics.map((topic, i) => (
+                        <div key={i} className={`bg-[#0F172A] border border-slate-800 rounded-[2rem] p-6 hover:-translate-y-1 transition-all flex flex-col sm:flex-row gap-6 items-start sm:items-center group shadow-xl ${campaignType === 'warm' ? 'hover:border-purple-500/50' : 'hover:border-blue-500/50'}`}>
+                            <div className="flex-1 space-y-2 w-full">
+                                <h3 className="text-lg font-black text-white tracking-tight leading-snug">{topic.title}</h3>
+                                <p className="text-slate-400 text-sm leading-relaxed">{topic.rationale}</p>
+                            </div>
+                            <button onClick={() => runContentEngine(topic)} className={`w-full sm:w-auto px-8 py-5 border rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] transition-all flex-shrink-0 flex items-center justify-center gap-2 ${campaignType === 'warm' ? 'bg-purple-600/10 text-purple-400 border-purple-600/30 hover:bg-purple-600 hover:text-white' : 'bg-blue-600/10 text-blue-400 border-blue-600/30 hover:bg-blue-600 hover:text-white'}`}>
+                                Pitches erstellen <ChevronRight size={16} />
                             </button>
-                          </div>
                         </div>
-                        <div className="p-10 flex flex-col md:flex-row gap-10 bg-gray-900/30">
-                          {item.image && (
-                            <div
-                              className="md:w-1/4 aspect-square rounded-[2rem] overflow-hidden shadow-2xl flex-shrink-0 cursor-zoom-in"
-                              onClick={() => setZoomedImage(item.image)}
-                            >
-                              <img
-                                src={item.image}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                              />
-                            </div>
-                          )}
-                          <div className="flex-1 flex flex-col justify-center space-y-4">
-                            <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] italic opacity-60">
-                              Micro Bullet
-                            </p>
-                            <p className="text-xl font-bold text-white line-clamp-3 italic leading-snug">
-                              "{item.micro}"
-                            </p>
-                            <div className="pt-6 mt-auto border-t border-white/5 flex gap-4">
-                              <button
-                                onClick={() => {
-                                  setPosts(item);
-                                  setInput(item.topic);
-                                  setLanguage(item.lang);
-                                  setActiveStep("result");
-                                }}
-                                className="px-8 py-4 bg-white/5 text-gray-400 text-[10px] font-black uppercase tracking-[0.4em] hover:bg-blue-600 hover:text-white transition-all rounded-2xl"
-                              >
-                                OPEN STUDIO
-                              </button>
-                            </div>
-                          </div>
+                    ))}
+                </div>
+
+                <div className="mt-4 bg-black/50 p-6 rounded-[2rem] border border-slate-800 overflow-hidden">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500 mb-4 flex items-center gap-3"><LinkIcon size={14}/> Verifizierte Quellen</h4>
+                    {groundingSources.length > 0 ? (
+                        <ul className="space-y-2">
+                            {groundingSources.map((source, i) => (
+                                <li key={i} className={`text-xs truncate hover:underline ${campaignType === 'warm' ? 'text-purple-400' : 'text-blue-400'}`}>
+                                    <a href={source.url || source.uri} target="_blank" rel="noopener noreferrer">[{i+1}] {source.title || source.url || source.uri}</a>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <div className="flex items-center gap-3 text-amber-500 text-xs bg-amber-500/10 p-4 rounded-xl border border-amber-500/20">
+                            <AlertTriangle size={14} /> Keine direkten News-URLs verknüpft.
                         </div>
-                      </div>
+                    )}
+                </div>
+            </div>
+          </div>
+        )}
+
+        {/* === STEP 3: LOADING === */}
+        {activeStep === 'generating' && (
+          <div className="max-w-2xl mx-auto py-32 md:py-56 space-y-12 md:space-y-16 text-center animate-in fade-in flex-1">
+            <div className="relative inline-flex items-center justify-center scale-125 md:scale-[2] mb-10 md:mb-16">
+                <div className={`w-24 h-24 md:w-32 md:h-32 border-[6px] md:border-[8px] border-slate-800 rounded-full ${campaignType === 'warm' ? 'border-t-purple-500' : 'border-t-blue-500'} animate-spin`} />
+                <Zap size={32} className={`absolute m-auto ${campaignType === 'warm' ? 'text-purple-500 fill-purple-500' : 'text-blue-500 fill-blue-500'} animate-pulse`} />
+            </div>
+            <div className="space-y-6 md:space-y-8 px-4">
+                <h2 className="text-2xl md:text-4xl font-black uppercase italic tracking-[0.2em] md:tracking-[0.3em] text-white drop-shadow-lg">{progressLabel}</h2>
+                <div className="w-full bg-slate-900 h-6 md:h-8 rounded-full overflow-hidden border-2 md:border-4 border-slate-800 shadow-inner p-1">
+                    <div className={`h-full ${campaignType === 'warm' ? 'bg-purple-600 shadow-[0_0_20px_rgba(147,51,234,0.8)]' : 'bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.8)]'} rounded-full transition-all duration-300 relative overflow-hidden flex items-center justify-end pr-4`} style={{ width: `${progress}%` }}>
+                        <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]"></div>
                     </div>
-                  ))}
+                </div>
+            </div>
+          </div>
+        )}
+
+        {/* === STEP 4: RESULTS (DIE PITCH MATRIX) === */}
+        {activeStep === 'result' && (
+          <div className="flex flex-col xl:flex-row gap-8 md:gap-10 animate-in fade-in slide-in-from-bottom-10 pb-32 w-full pt-4 md:pt-8">
+            
+            {/* LINKE SPALTE: PITCH CONTENT */}
+            <div className="w-full xl:w-2/3 space-y-8">
+              <div className="flex flex-col sm:flex-row gap-4 p-5 bg-[#0F172A] border border-slate-800 rounded-[2rem] items-center shadow-xl">
+                 <div className="flex flex-col flex-1 px-4 sm:border-r border-slate-700 w-full text-center sm:text-left"><span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Target</span><span className={`text-sm font-bold truncate ${campaignType === 'warm' ? 'text-purple-400' : 'text-blue-400'}`}>{targetCompany}</span></div>
+                 <div className="flex flex-col flex-1 px-4 sm:border-r border-slate-700 w-full text-center sm:text-left"><span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Persona</span><span className="text-sm text-white font-bold">{persona}</span></div>
+                 <div className="flex flex-col flex-1 px-4 w-full text-center sm:text-left"><span className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Context</span><span className="text-sm text-white font-bold truncate">{campaignType === 'warm' ? (warmType === 'event' ? 'Messe' : warmType === 'lost_deal' ? 'Lost Deal' : 'Refresh') : selectedTopic?.title}</span></div>
               </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+                 <ContentCard title="Hard Pitch (Direkt)" pitchData={posts.pitch_direct} type="pitch_direct" icon={Crosshair} color="bg-red-500" />
+                 <ContentCard title="Value Pitch (Mehrwert)" pitchData={posts.pitch_value} type="pitch_value" icon={BarChart3} color="bg-blue-500" />
+              </div>
+              <ContentCard title="Narrative Pitch (Story/News)" pitchData={posts.pitch_story} type="pitch_story" icon={AlignJustify} color="bg-purple-500" />
+            </div>
+            
+            {/* RECHTE SPALTE: DOSSIER RECAP & SPEICHERN */}
+            <div className="w-full xl:w-1/3 flex flex-col gap-8">
+              <div className="bg-[#0F172A] p-6 md:p-8 rounded-[2.5rem] md:rounded-[3.5rem] shadow-2xl border border-slate-800 w-full">
+                
+                {/* DOSSIER RECAP */}
+                <div className="mb-8 space-y-4 bg-black/40 p-6 rounded-3xl border border-slate-800">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 border-b border-slate-800 pb-2">Unternehmensdaten</h3>
+                    <div className="flex items-start gap-3">
+                        <Phone size={14} className="text-slate-400 mt-1 flex-shrink-0" />
+                        <span className="text-sm font-bold text-white">{companyData.phone || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <MapPin size={14} className="text-slate-400 mt-1 flex-shrink-0" />
+                        <span className="text-xs text-slate-300 leading-tight">{companyData.address || 'N/A'}</span>
+                    </div>
+                </div>
+
+                {/* DAS BILD */}
+                <div className="flex justify-between items-center mb-4 px-2">
+                    <span className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-400">Brand Visual</span>
+                </div>
+                
+                <div className="aspect-video bg-black rounded-[2rem] border-8 border-slate-900 overflow-hidden flex items-center justify-center relative group cursor-zoom-in mb-6" onClick={() => posts.image && setZoomedImage(posts.image)}>
+                    {loadingItems.image ? <Loader2 className="animate-spin text-slate-700" size={32} /> : posts.image ? <img src={posts.image} alt="Visual" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" /> : <ImageIcon className="text-slate-800" size={32} />}
+                </div>
+
+                <div className="bg-black/50 p-4 rounded-[2rem] border border-slate-800 mb-6 space-y-3">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 flex items-center gap-2"><Edit3 size={12}/> AI Image Prompt</label>
+                    <textarea 
+                        value={customImagePrompt} 
+                        onChange={(e) => setCustomImagePrompt(e.target.value)}
+                        className="w-full p-4 bg-slate-900 border-2 border-slate-800 rounded-2xl text-slate-300 outline-none text-xs focus:border-blue-600 transition-colors h-20 resize-none"
+                        placeholder="Beschreibe das Bild auf Englisch..."
+                    />
+                    <button onClick={() => generateImage()} disabled={loadingItems.image} className="w-full py-3 rounded-xl font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-2 transition-all bg-blue-900/40 text-blue-400 hover:bg-blue-600 hover:text-white">
+                       <RefreshCw size={14} className={loadingItems.image ? 'animate-spin' : ''}/> {loadingItems.image ? 'Rendering...' : 'Bild generieren'}
+                    </button>
+                </div>
+
+                {/* SPEICHERN */}
+                <div className="bg-black/50 p-5 rounded-[2rem] border border-slate-800 mb-6 space-y-4">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 flex items-center gap-2"><CalendarDays size={12}/> Schedule Date</label>
+                    <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} className="w-full p-4 bg-slate-900 border-2 border-slate-800 rounded-2xl text-white outline-none text-sm font-bold focus:border-blue-600 transition-colors" />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                    <button onClick={archiveAsset} disabled={loading} className={`py-5 bg-green-600 text-white rounded-[2rem] font-black text-[10px] uppercase shadow-[0_15px_30px_-10px_rgba(22,163,74,0.5)] hover:bg-green-500 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50`}><Save size={16}/> SAVE</button>
+                    <button onClick={() => setActiveStep('library')} className="py-5 bg-slate-800 text-white rounded-[2rem] font-black text-[10px] uppercase hover:bg-slate-700 active:scale-95 flex items-center justify-center gap-2 transition-all"><Library size={16}/> VAULT</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* === STEP 5: VAULT === */}
+        {activeStep === 'library' && (
+          <div className="space-y-16 animate-in slide-in-from-right-16 pb-32 px-2 md:px-4 w-full flex-1 flex flex-col pt-10">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 px-2 md:px-8 border-b border-slate-800 pb-10">
+                <div><h2 className="text-5xl md:text-8xl font-black uppercase italic tracking-tighter text-white leading-none">The Vault.</h2><p className="text-blue-500 text-[10px] md:text-[12px] font-bold uppercase tracking-[0.6em] mt-4 md:mt-8">Strategic Asset & Dossier Management</p></div>
+                <button onClick={resetEngine} className="bg-white text-slate-900 px-10 md:px-12 py-4 md:py-5 rounded-full text-[10px] md:text-[11px] font-black uppercase hover:scale-105 active:scale-95 transition-all tracking-[0.3em]">Zum Router</button>
+            </div>
+            
+            {assetLibrary.length === 0 ? (
+                <div className="bg-[#0F172A]/50 p-20 md:p-60 rounded-[4rem] md:rounded-[6rem] border-4 border-dashed border-slate-800 flex flex-col items-center justify-center">
+                    <Library size={60} md:size={80} className="text-slate-800 mb-8 md:mb-10" />
+                    <p className="text-slate-600 text-xs md:text-sm font-black uppercase tracking-[0.6em] italic text-center">Vault is empty.</p>
+                </div>
+            ) : (
+                <div className="space-y-10 md:space-y-16 mt-10">
+                    {assetLibrary.map((item) => (
+                        <div key={item.id} className="bg-[#0F172A] rounded-[3rem] md:rounded-[4rem] border border-slate-800 overflow-hidden flex flex-col shadow-2xl hover:-translate-y-2 transition-all duration-500">
+                            <div className="p-6 md:p-10 bg-black/50 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-slate-800">
+                                <div className="flex items-center gap-4 md:gap-6 flex-1 w-full">
+                                    <div className={`px-4 md:px-5 py-2 md:py-2.5 rounded-xl md:rounded-2xl border flex items-center gap-2 flex-shrink-0 ${item.type === 'warm' ? 'bg-purple-900/30 text-purple-400 border-purple-500/30' : 'bg-blue-900/30 text-blue-400 border-blue-500/30'}`}>
+                                        {item.type === 'warm' ? <Users size={14}/> : <Search size={14}/>}
+                                        <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest">{item.scheduledDate || 'DRAFT'}</span>
+                                    </div>
+                                    <span className="text-lg md:text-2xl font-black uppercase truncate italic tracking-tighter opacity-90">{item.name}</span>
+                                </div>
+                                <div className="flex items-center gap-3 md:gap-4">
+                                    <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-900 px-3 md:px-4 py-2 rounded-xl border border-slate-800 hidden sm:block">{item.companySize}</span>
+                                    <span className={`text-[8px] md:text-[9px] font-black uppercase tracking-widest px-3 md:px-4 py-2 rounded-xl border ${item.type === 'warm' ? 'text-purple-400 bg-purple-900/20 border-purple-900/50' : 'text-blue-400 bg-blue-900/20 border-blue-900/50'}`}>{item.persona}</span>
+                                    <button onClick={() => setAssetLibrary(assetLibrary.filter(a => a.id !== item.id))} className="text-slate-600 hover:text-red-500 p-2 md:p-3 bg-black/40 rounded-full"><Trash2 size={16} md:size={18} /></button>
+                                </div>
+                            </div>
+                            <div className="p-6 md:p-12 flex flex-col md:flex-row gap-8 md:gap-12 items-start">
+                                {/* Dossier Info im Vault */}
+                                <div className="w-full md:w-1/3 bg-black/40 p-6 rounded-[2rem] border border-slate-800 space-y-4">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-800 pb-2">Firmendaten</p>
+                                    <p className="text-sm font-bold text-white flex items-center gap-2"><Phone size={14} className="text-slate-400"/> {item.companyPhone || 'N/A'}</p>
+                                    {item.companyComments && (
+                                        <div className="mt-4 pt-4 border-t border-slate-800">
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Notizen</p>
+                                            <p className="text-xs text-slate-400 italic line-clamp-3">{item.companyComments}</p>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex-1 flex flex-col justify-center space-y-4 md:space-y-6 w-full">
+                                    <p className={`text-[9px] md:text-[10px] font-black uppercase tracking-[0.5em] italic ${item.type === 'warm' ? 'text-purple-500' : 'text-blue-500'}`}>{item.type === 'warm' ? 'Warm Angle' : 'Cold Angle'}</p>
+                                    <p className="text-lg md:text-xl font-bold text-white line-clamp-4 italic tracking-tight leading-relaxed">"{item.topic}"</p>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             )}
           </div>
         )}
 
         {error && (
-          <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-600 text-white px-8 py-5 rounded-3xl shadow-2xl animate-bounce z-[100] border-2 border-red-500 flex items-center gap-4">
-            <AlertCircle size={22} />
-            <span className="text-xs font-black uppercase tracking-widest italic">
-              {error}
-            </span>
+          <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-950 text-red-200 px-6 md:px-8 py-4 md:py-6 rounded-[2rem] md:rounded-[2.5rem] shadow-[0_0_100px_rgba(220,38,38,0.5)] border-2 border-red-900 flex items-center gap-4 md:gap-6 z-[200] w-[90vw] md:max-w-2xl animate-in slide-in-from-bottom-6">
+            <ShieldAlert size={28} md:size={32} className="text-red-500 flex-shrink-0" />
+            <span className="text-xs md:text-sm font-bold italic flex-1">{error}</span>
+            <button onClick={() => setError(null)} className="p-2 text-red-500 hover:text-white hover:bg-red-900 rounded-full transition-colors flex-shrink-0"><X size={20}/></button>
           </div>
         )}
       </main>
+
+      <style>{`
+        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        .cursor-zoom-in { cursor: zoom-in; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #020617; }
+        ::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+      `}</style>
     </div>
   );
 }
