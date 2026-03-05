@@ -5,12 +5,14 @@ import {
   AlignCenter, AlignJustify, AlignLeft, ShieldCheck, Rocket, CalendarDays, 
   Clock, MessageCircle, Target, Briefcase, ShieldAlert, Library, Save, Trash2, ChevronRight,
   Building2, Globe2, Network, Lightbulb, Crosshair, Info, Edit3, Search, Link as LinkIcon, AlertTriangle,
-  Users, PhoneCall, Video, HelpCircle, MapPin, History, RefreshCcw, Phone, StickyNote, Activity, Database, FolderOpen
+  Users, PhoneCall, Video, HelpCircle, MapPin, History, RefreshCcw, Phone, StickyNote, Activity, Database, FolderOpen,
+  ArrowLeft, ArrowRight
 } from 'lucide-react';
 
 export default function App() {
   // --- KERN-ZUSTAND ---
   const [activeStep, setActiveStep] = useState('input_master'); 
+  const [lastStep, setLastStep] = useState('input_master'); 
   
   // --- EINGABE STATE (Single Vector) ---
   const [targetCompany, setTargetCompany] = useState('');
@@ -54,13 +56,18 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [loadingItems, setLoadingItems] = useState({ pitch_direct: false, pitch_value: false, pitch_story: false, image: false });
   const [error, setError] = useState(null);
-  const [safetyTriggered, setSafetyTriggered] = useState(false); // Der Türsteher-State
+  const [safetyTriggered, setSafetyTriggered] = useState(false); 
   const [assetLibrary, setAssetLibrary] = useState([]);
   const [zoomedImage, setZoomedImage] = useState(null);
   const [copiedType, setCopiedType] = useState(null);
   const [editingId, setEditingId] = useState(null);
 
   const columboImageUrl = "https://m.media-amazon.com/images/M/MV5BMzU4MDI3NTc2OV5BMl5BanBnXkFtZTgwNjMzNDIzMzE@._V1_.jpg";
+
+  // Sync des generierten Prompts in das editierbare Feld
+  useEffect(() => {
+    if (posts.description) setCustomImagePrompt(posts.description);
+  }, [posts.description]);
 
   // Tailwind Fallback
   useEffect(() => {
@@ -83,9 +90,50 @@ export default function App() {
     return () => clearInterval(interval);
   }, [loading, progress]);
 
+  // --- FLUID NAVIGATION LOGIC ---
+  const canGoBack = activeStep !== 'input_master' && activeStep !== 'generating';
+  
+  const canGoForward = () => {
+    if (activeStep === 'input_master' && columboData.question) return true;
+    if (activeStep === 'columbo') {
+      if (campaignType === 'warm' && posts.pitch_direct.text && posts.pitch_direct.text !== "Fehler") return true;
+      if (campaignType === 'cold' && researchTopics.length > 0) return true;
+    }
+    if (activeStep === 'topic_selection' && posts.pitch_direct.text && posts.pitch_direct.text !== "Fehler") return true;
+    return false;
+  };
+
+  const handleBack = () => {
+    if (activeStep === 'library') {
+      setActiveStep(lastStep);
+      return;
+    }
+    if (activeStep === 'result') {
+      setActiveStep(campaignType === 'warm' ? 'columbo' : 'topic_selection');
+    } else if (activeStep === 'topic_selection') {
+      setActiveStep('columbo');
+    } else if (activeStep === 'columbo') {
+      setActiveStep('input_master');
+    }
+  };
+
+  const handleForward = () => {
+    if (activeStep === 'input_master' && columboData.question) {
+      setActiveStep('columbo');
+    } else if (activeStep === 'columbo') {
+      if (campaignType === 'warm' && posts.pitch_direct.text && posts.pitch_direct.text !== "Fehler") {
+         setActiveStep('result');
+      } else if (campaignType === 'cold' && researchTopics.length > 0) {
+         setActiveStep('topic_selection');
+      }
+    } else if (activeStep === 'topic_selection' && posts.pitch_direct.text && posts.pitch_direct.text !== "Fehler") {
+      setActiveStep('result');
+    }
+  };
+
   const resetEngine = () => {
     setTargetCompany(''); setInput(''); setWarmContext(''); setColumboAnswer('');
-    setResearchTopics([]); setGroundingSources([]);
+    setResearchTopics([]); setGroundingSources([]); setColumboData({ question: '', options: [] });
     setCompanyData({ address: '', phone: '', comments: '' });
     setSafetyTriggered(false);
     setActiveStep('input_master');
@@ -153,13 +201,16 @@ export default function App() {
     if (!targetCompany.trim()) { setError("Zielfirma / Industrie ist zwingend erforderlich."); return; }
     if (campaignType === 'warm' && !warmContext.trim()) { setError("Bitte den Reaktivierungs-Kontext (z.B. Messe) angeben."); return; }
     
-    setLoading(true); setProgress(5); setProgressLabel(`Analysiere Angriffsfläche für ${targetCompany}...`); setError(null);
+    setLoading(true); setProgress(5); setProgressLabel(`Einen Augenblick bitte... Analysiere ${targetCompany}...`); setError(null);
     setSafetyTriggered(false);
+    setActiveStep('generating'); // Zeigt direkt den Ladescreen!
 
     // DER TÜRSTEHER SCHLÄGT ZU
     if (await checkRelevance(targetCompany)) {
         setSafetyTriggered(true);
-        setLoading(false); setProgress(0); return;
+        setLoading(false); setProgress(0); 
+        setActiveStep('input_master'); 
+        return;
     }
 
     try {
@@ -185,7 +236,7 @@ export default function App() {
       });
       setColumboAnswer('');
       setActiveStep('columbo');
-    } catch (err) { setError(err.message || "Columbo konnte nicht geladen werden."); } 
+    } catch (err) { setError(err.message || "Columbo konnte nicht geladen werden."); setActiveStep('input_master'); } 
     finally { setLoading(false); setProgress(0); }
   };
 
@@ -359,6 +410,7 @@ export default function App() {
           date: new Date().toLocaleDateString() 
       };
       setAssetLibrary([newAsset, ...assetLibrary]);
+      setLastStep('result');
       setActiveStep('library');
     } catch (err) { setError("Speichern fehlgeschlagen."); }
     finally { setLoading(false); }
@@ -379,6 +431,7 @@ export default function App() {
     setResearchTopics(item.allTopics || []);
     setSelectedTopic({ title: item.topic });
     setScheduleDate(item.scheduledDate || '');
+    setLastStep('library');
     setActiveStep('result');
   };
 
@@ -449,16 +502,29 @@ export default function App() {
         </div>
       )}
 
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-[#020617]/95 backdrop-blur-xl border-b border-slate-800 p-5 px-6 md:px-10 flex justify-between items-center w-full shadow-2xl">
-        <div className="flex items-center gap-6">
-          {activeStep !== 'input_master' && <button onClick={resetEngine} className="p-3 bg-slate-800 rounded-full text-blue-400 hover:bg-slate-700 active:scale-95 transition-all"><RotateCcw size={20}/></button>}
-          <div className="flex flex-col">
+      {/* --- FLUID NAVIGATION HEADER --- */}
+      <header className="sticky top-0 z-50 bg-[#020617]/95 backdrop-blur-xl border-b border-slate-800 p-4 md:px-10 flex justify-between items-center w-full shadow-2xl">
+        <div className="flex items-center gap-4 md:gap-6">
+          
+          <div className="flex bg-black/40 border border-slate-800 rounded-full p-1 shadow-inner items-center">
+            <button onClick={handleBack} disabled={!canGoBack} className={`p-2 rounded-full transition-all ${canGoBack ? 'text-slate-300 hover:text-white hover:bg-slate-800' : 'text-slate-800 cursor-not-allowed'}`} title="Einen Schritt zurück">
+              <ArrowLeft size={18} />
+            </button>
+            <button onClick={handleForward} disabled={!canGoForward()} className={`p-2 rounded-full transition-all ${canGoForward() ? 'text-slate-300 hover:text-white hover:bg-slate-800' : 'text-slate-800 cursor-not-allowed'}`} title="Einen Schritt vor">
+              <ArrowRight size={18} />
+            </button>
+            <div className="w-px h-4 bg-slate-800 mx-1"></div>
+            <button onClick={resetEngine} className="p-2 rounded-full text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-all" title="Achtung: Kompletten Speicher löschen (Neu Starten)">
+              <RotateCcw size={18} />
+            </button>
+          </div>
+
+          <div className="hidden sm:flex flex-col">
             <h1 className="text-sm font-black uppercase tracking-[0.4em] text-white italic">ELWIS LAB</h1>
-            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v19.0 | EXECUTIVE UX</span>
+            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v20.0 | FLUID NAV</span>
           </div>
         </div>
-        <button onClick={() => setActiveStep('library')} className="p-4 bg-slate-800 rounded-2xl border border-slate-700 relative hover:bg-slate-700 transition-all flex items-center gap-3">
+        <button onClick={() => { if(activeStep !== 'library') setLastStep(activeStep); setActiveStep('library'); }} className="p-4 bg-slate-800 rounded-2xl border border-slate-700 relative hover:bg-slate-700 transition-all flex items-center gap-3">
           <Database size={20} className="text-white" />
           <span className="text-[10px] font-black uppercase tracking-widest hidden sm:block text-slate-300">CRM Vault</span>
           {assetLibrary.length > 0 && <span className="absolute -top-2 -right-2 w-6 h-6 bg-blue-500 rounded-full text-[10px] flex items-center justify-center font-black border-2 border-[#020617] shadow-lg text-white">{assetLibrary.length}</span>}
@@ -750,6 +816,20 @@ export default function App() {
                         {posts.image ? <img src={posts.image} alt="Visual" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" /> : <Loader2 className="animate-spin text-slate-700" size={48} />}
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-blue-900/20 backdrop-blur-sm"><Maximize2 size={48} className="text-white drop-shadow-lg" /></div>
                     </div>
+
+                    <div className="bg-black/50 p-5 rounded-[2rem] border border-slate-800 mb-8 space-y-3">
+                        <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 flex items-center gap-2"><Edit3 size={12}/> AI Image Prompt</label>
+                        <textarea 
+                            value={customImagePrompt} 
+                            onChange={(e) => setCustomImagePrompt(e.target.value)}
+                            className={`w-full p-4 bg-slate-900 border-2 border-slate-800 rounded-2xl text-slate-300 outline-none text-xs transition-colors h-20 resize-none focus:border-${campaignType === 'warm' ? 'purple' : 'blue'}-600`}
+                            placeholder="Beschreibe das Bild auf Englisch..."
+                        />
+                        <button onClick={() => generateImage(customImagePrompt)} disabled={loadingItems.image} className={`w-full py-3 rounded-xl font-black uppercase tracking-widest text-[9px] flex items-center justify-center gap-2 transition-all ${campaignType === 'warm' ? 'bg-purple-900/40 text-purple-400 hover:bg-purple-600 hover:text-white' : 'bg-blue-900/40 text-blue-400 hover:bg-blue-600 hover:text-white'}`}>
+                           <RefreshCw size={14} className={loadingItems.image ? 'animate-spin' : ''}/> {loadingItems.image ? 'Rendering...' : 'Bild generieren'}
+                        </button>
+                    </div>
+
                   </div>
                 </div>
             </div>
@@ -769,7 +849,7 @@ export default function App() {
                     </div>
 
                     <div className="flex w-full md:w-auto gap-4">
-                        <button onClick={() => setActiveStep('library')} className="flex-1 md:flex-none px-8 py-5 bg-slate-800 text-white rounded-3xl font-black text-[11px] md:text-xs uppercase hover:bg-slate-700 active:scale-95 flex items-center justify-center gap-3 transition-all">
+                        <button onClick={() => { if(activeStep !== 'library') setLastStep(activeStep); setActiveStep('library'); }} className="flex-1 md:flex-none px-8 py-5 bg-slate-800 text-white rounded-3xl font-black text-[11px] md:text-xs uppercase hover:bg-slate-700 active:scale-95 flex items-center justify-center gap-3 transition-all">
                             <Library size={18}/> VAULT
                         </button>
                         <button onClick={archiveAsset} disabled={loading} className="flex-1 md:flex-none px-12 py-5 bg-green-600 text-white rounded-3xl font-black text-[11px] md:text-xs uppercase shadow-[0_0_30px_rgba(22,163,74,0.4)] hover:bg-green-500 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3">
@@ -805,8 +885,8 @@ export default function App() {
                     ))}
                 </div>
                 <div className="p-4 border-t border-slate-800 bg-black/30">
-                    <button onClick={resetEngine} className="w-full bg-slate-800 text-white py-4 rounded-2xl text-[10px] font-black uppercase hover:bg-slate-700 transition-all flex items-center justify-center gap-2">
-                        <RotateCcw size={14}/> Studio Return
+                    <button onClick={handleBack} className="w-full bg-slate-800 text-white py-4 rounded-2xl text-[10px] font-black uppercase hover:bg-slate-700 transition-all flex items-center justify-center gap-2">
+                        <ArrowLeft size={14}/> Studio Return
                     </button>
                 </div>
             </div>
