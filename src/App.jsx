@@ -19,6 +19,8 @@ export default function App() {
   const [tone, setTone] = useState('Analytisch');
   const [targetCompany, setTargetCompany] = useState(''); 
   const [input, setInput] = useState(''); // Optionaler Start-Kontext
+  
+  // --- GOOGLE API KEY ---
   const apiKey = "AIzaSyCNZaqJ2fLAGyfSfEgJG7u7b4x9qC0mWV8"; 
 
   // --- ENGINE STATE ---
