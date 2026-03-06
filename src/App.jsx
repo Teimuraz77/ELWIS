@@ -6,29 +6,27 @@ import {
   Clock, MessageCircle, Target, Briefcase, ShieldAlert, Library, Save, Trash2, ChevronRight,
   Building2, Globe2, Network, Lightbulb, Crosshair, Info, Edit3, Search, Link as LinkIcon, AlertTriangle,
   Users, PhoneCall, Video, HelpCircle, MapPin, History, RefreshCcw, Phone, StickyNote, Activity, Database, FolderOpen,
-  ArrowLeft, ArrowRight
+  ArrowLeft, ArrowRight, Factory, User
 } from 'lucide-react';
 
 export default function App() {
-  // --- KERN-ZUSTAND ---
+  // --- CORE STATE ---
   const [activeStep, setActiveStep] = useState('input_master'); 
   const [lastStep, setLastStep] = useState('input_master'); 
   
-  // --- EINGABE STATE (Single Vector) ---
-  const [targetCompany, setTargetCompany] = useState('');
+  // --- EINGABE STATE (Linear Vector) ---
+  const [targetType, setTargetType] = useState('firma'); // 'firma', 'industrie', 'persona'
+  const [targetName, setTargetName] = useState('');
   const [campaignType, setCampaignType] = useState('cold'); 
   const [persona, setPersona] = useState('Geschäftsführung');
   const [tone, setTone] = useState('Analytisch');
   const [input, setInput] = useState(''); 
   
-  // Spezifisch für Warm Outreach
+  // Warm Outreach State
   const [warmType, setWarmType] = useState('event'); 
   const [warmContext, setWarmContext] = useState(''); 
 
-  // --- ENGINE STATE (Columbo & Research) ---
-  const [columboData, setColumboData] = useState({ question: '', options: [] });
-  const [columboAnswer, setColumboAnswer] = useState('');
-  
+  // --- ENGINE STATE (Research) ---
   const [companyData, setCompanyData] = useState({ address: '', phone: '', comments: '' });
   const [researchTopics, setResearchTopics] = useState([]);
   const [groundingSources, setGroundingSources] = useState([]);
@@ -39,9 +37,9 @@ export default function App() {
 
   // --- OUTPUT STATE ---
   const [posts, setPosts] = useState({ 
-      pitch_direct: { text: '', chance: '', reason: '' }, 
-      pitch_value: { text: '', chance: '', reason: '' }, 
-      pitch_story: { text: '', chance: '', reason: '' }, 
+      micro: '', 
+      mini: '', 
+      medium: '', 
       image: null, 
       description: '' 
   });
@@ -54,7 +52,7 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loadingItems, setLoadingItems] = useState({ pitch_direct: false, pitch_value: false, pitch_story: false, image: false });
+  const [loadingItems, setLoadingItems] = useState({ micro: false, mini: false, medium: false, image: false });
   const [error, setError] = useState(null);
   const [safetyTriggered, setSafetyTriggered] = useState(false); 
   const [assetLibrary, setAssetLibrary] = useState([]);
@@ -62,9 +60,7 @@ export default function App() {
   const [copiedType, setCopiedType] = useState(null);
   const [editingId, setEditingId] = useState(null);
 
-  const columboImageUrl = "https://m.media-amazon.com/images/M/MV5BMzU4MDI3NTc2OV5BMl5BanBnXkFtZTgwNjMzNDIzMzE@._V1_.jpg";
-
-  // Sync des generierten Prompts in das editierbare Feld
+  // Sync Prompt
   useEffect(() => {
     if (posts.description) setCustomImagePrompt(posts.description);
   }, [posts.description]);
@@ -90,50 +86,34 @@ export default function App() {
     return () => clearInterval(interval);
   }, [loading, progress]);
 
+  // --- PREDICTIVE LOGIC (Heuristik) ---
+  const getPrediction = (p, t) => {
+    if(p==='Geschäftsführung' && t==='Analytisch') return { rate: 88, text: 'Perfekter Match. Fokus auf ROI und nackte Zahlen zieht bei Executives.'};
+    if(p==='Geschäftsführung' && t==='Visionär') return { rate: 65, text: 'Risikoreich. Große Visionen sind gut, aber C-Level braucht harte Fakten.'};
+    if(p==='Geschäftsführung' && t==='Direkt') return { rate: 75, text: 'Zeit ist Geld. Klare Ansagen ohne Blabla funktionieren oft exzellent.'};
+    if(p==='Tech Lead' && t==='Analytisch') return { rate: 92, text: 'Höchste Conversion. Fakten, Architektur, Sicherheit.'};
+    if(p==='Tech Lead' && t==='Visionär') return { rate: 45, text: 'Warnung: Techies reagieren allergisch auf Marketing-Buzzwords.'};
+    if(p==='Tech Lead' && t==='Direkt') return { rate: 80, text: 'Sehr gut. Klartext über echte IT-Schmerzpunkte kommt an.'};
+    if(p==='Betriebsleiter' && t==='Analytisch') return { rate: 85, text: 'Stark. Prozessoptimierung muss in Zahlen messbar gemacht werden.'};
+    if(p==='Betriebsleiter' && t==='Visionär') return { rate: 40, text: 'Warnung: Ops will wissen wie es heute funktioniert, nicht 2030.'};
+    if(p==='Betriebsleiter' && t==='Direkt') return { rate: 90, text: 'Top. Direkt auf den operativen Schmerz zielen.'};
+    return { rate: 50, text: 'Standard-Prognose.' };
+  };
+
+  const prediction = getPrediction(persona, tone);
+  const chanceColor = prediction.rate > 70 ? 'text-green-400' : prediction.rate > 50 ? 'text-amber-400' : 'text-red-400';
+
   // --- FLUID NAVIGATION LOGIC ---
   const canGoBack = activeStep !== 'input_master' && activeStep !== 'generating';
-  
-  const canGoForward = () => {
-    if (activeStep === 'input_master' && columboData.question) return true;
-    if (activeStep === 'columbo') {
-      if (campaignType === 'warm' && posts.pitch_direct.text && posts.pitch_direct.text !== "Fehler") return true;
-      if (campaignType === 'cold' && researchTopics.length > 0) return true;
-    }
-    if (activeStep === 'topic_selection' && posts.pitch_direct.text && posts.pitch_direct.text !== "Fehler") return true;
-    return false;
-  };
-
   const handleBack = () => {
-    if (activeStep === 'library') {
-      setActiveStep(lastStep);
-      return;
-    }
-    if (activeStep === 'result') {
-      setActiveStep(campaignType === 'warm' ? 'columbo' : 'topic_selection');
-    } else if (activeStep === 'topic_selection') {
-      setActiveStep('columbo');
-    } else if (activeStep === 'columbo') {
-      setActiveStep('input_master');
-    }
-  };
-
-  const handleForward = () => {
-    if (activeStep === 'input_master' && columboData.question) {
-      setActiveStep('columbo');
-    } else if (activeStep === 'columbo') {
-      if (campaignType === 'warm' && posts.pitch_direct.text && posts.pitch_direct.text !== "Fehler") {
-         setActiveStep('result');
-      } else if (campaignType === 'cold' && researchTopics.length > 0) {
-         setActiveStep('topic_selection');
-      }
-    } else if (activeStep === 'topic_selection' && posts.pitch_direct.text && posts.pitch_direct.text !== "Fehler") {
-      setActiveStep('result');
-    }
+    if (activeStep === 'library') setActiveStep(lastStep);
+    else if (activeStep === 'result') setActiveStep('topic_selection');
+    else if (activeStep === 'topic_selection') setActiveStep('input_master');
   };
 
   const resetEngine = () => {
-    setTargetCompany(''); setInput(''); setWarmContext(''); setColumboAnswer('');
-    setResearchTopics([]); setGroundingSources([]); setColumboData({ question: '', options: [] });
+    setTargetName(''); setInput(''); setWarmContext(''); 
+    setResearchTopics([]); setGroundingSources([]);
     setCompanyData({ address: '', phone: '', comments: '' });
     setSafetyTriggered(false);
     setActiveStep('input_master');
@@ -142,7 +122,6 @@ export default function App() {
   // --- KUGELSICHERER API CALLER ---
   const apiCall = async (payload, useSearch = false) => {
     if (!apiKey) throw new Error("API-Schlüssel fehlt! Bitte im Code eintragen.");
-    
     let url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     
     if (useSearch) {
@@ -159,9 +138,8 @@ export default function App() {
       try {
         const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         if (!response.ok) {
-            const errText = await response.text();
             if (response.status === 429) throw new Error("RATE_LIMIT");
-            throw new Error(`Status ${response.status} - ${errText}`);
+            throw new Error(`Status ${response.status}`);
         }
         return await response.json();
       } catch (err) {
@@ -196,17 +174,17 @@ export default function App() {
     } catch (e) { return false; }
   };
 
-  // --- PHASE 1: COLUMBO QUESTION ---
-  const startColumbo = async () => {
-    if (!targetCompany.trim()) { setError("Zielfirma / Industrie ist zwingend erforderlich."); return; }
-    if (campaignType === 'warm' && !warmContext.trim()) { setError("Bitte den Reaktivierungs-Kontext (z.B. Messe) angeben."); return; }
+  // --- PHASE 1: RESEARCH (Directly after Input) ---
+  const startResearch = async () => {
+    if (!targetName.trim()) { setError("Zielvorgabe ist zwingend erforderlich."); return; }
+    if (campaignType === 'warm' && targetType !== 'industrie' && !warmContext.trim()) { setError("Bitte den Reaktivierungs-Kontext (z.B. Messe) angeben."); return; }
     
-    setLoading(true); setProgress(5); setProgressLabel(`Einen Augenblick bitte... Analysiere ${targetCompany}...`); setError(null);
+    setLoading(true); setProgress(15); setProgressLabel(`Scanne globale News & Daten für ${targetName}...`); setError(null);
     setSafetyTriggered(false);
     setActiveStep('generating');
 
-    // DER TÜRSTEHER SCHLÄGT ZU
-    if (await checkRelevance(targetCompany)) {
+    // DER TÜRSTEHER
+    if (await checkRelevance(targetName)) {
         setSafetyTriggered(true);
         setLoading(false); setProgress(0); 
         setActiveStep('input_master'); 
@@ -214,46 +192,12 @@ export default function App() {
     }
 
     try {
-      let context = campaignType === 'warm' 
-        ? `Reaktivierung. Historie: ${warmContext}. Zusatz: ${input}` 
-        : `Kaltakquise. Zusatz: ${input}`;
+        let context = campaignType === 'warm' ? `Reaktivierung. Historie: ${warmContext}.` : `Kaltakquise.`;
+        if(input) context += ` Spezifischer Fokus: ${input}`;
 
-      const prompt = `Du bist Inspektor Columbo, ein B2B Stratege. Firma/Ziel: "${targetCompany}". Kontext: "${context}". 
-      Stelle EINE extrem kurze, provokante strategische Rückfrage (max 12 Wörter), um herauszufinden, auf welchen Schmerzpunkt wir uns in der Live-Recherche fokussieren sollen. 
-      Gib ZWEI mögliche strategische Antwort-Optionen vor.
-      JSON-Format zwingend: {"question": "...", "options": ["Option A", "Option B"]}. Sprache: Deutsch.`;
-      
-      const result = await apiCall({
-        contents: [{ parts: [{ text: context }] }],
-        systemInstruction: { parts: [{ text: prompt }] },
-        generationConfig: { responseMimeType: "application/json" }
-      });
-      
-      const parsed = parseJSON(result.candidates[0].content.parts[0].text);
-      setColumboData({ 
-        question: parsed?.question || "Wo brennt es aktuell am meisten in der Infrastruktur?", 
-        options: parsed?.options || ["Fokus: Veraltete Systeme", "Fokus: Wachstums-Schmerzen"] 
-      });
-      setColumboAnswer('');
-      setActiveStep('columbo');
-    } catch (err) { 
-      setError(err.message || "Columbo konnte nicht geladen werden."); 
-      setActiveStep('input_master'); 
-    } 
-    finally { setLoading(false); setProgress(0); }
-  };
-
-  // --- PHASE 2: RESEARCH (Impressum + 3 Hooks) ---
-  const startResearch = async (answer) => {
-    const finalAnswer = answer || columboAnswer;
-    setColumboAnswer(finalAnswer);
-    setActiveStep('generating');
-    setLoading(true); setProgress(15); setProgressLabel(`Scanne globale News & Impressum für ${targetCompany}...`); setError(null);
-
-    try {
-        const prompt = `Du bist ein B2B Lead-Research Analyst. Führe eine Live-Websuche für das Unternehmen "${targetCompany}" durch. Berücksichtige die strategische Richtung: "${finalAnswer}".
-        Aufgabe 1: Finde die offizielle Adresse (Headquarter) und die zentrale Telefonnummer aus dem Impressum.
-        Aufgabe 2: Entwickle 3 hochaktuelle strategische Aufhänger (Angriffsvorschläge) für einen Pitch an die Persona "${persona}".
+        const prompt = `Du bist ein B2B Lead-Research Analyst. Führe eine Live-Websuche für das Ziel "${targetName}" (Typ: ${targetType}) durch. Berücksichtige die strategische Richtung: "${context}".
+        Aufgabe 1: Wenn das Ziel eine "Firma" ist, finde die offizielle Adresse und zentrale Telefonnummer aus dem Impressum. Bei "Industrie" oder "Persona" gib "N/A" aus.
+        Aufgabe 2: Entwickle 3 hochaktuelle strategische Aufhänger (Angriffsvorschläge) für einen Pitch an die Persona "${persona}" mit dem Tonfall "${tone}".
         
         REGEL: Antworte AUSSCHLIESSLICH mit rohem, gültigen JSON.
         Format: {
@@ -270,8 +214,8 @@ export default function App() {
         }
 
         setCompanyData({
-            address: parsed.companyInfo?.address || "Adresse nicht eindeutig gefunden.",
-            phone: parsed.companyInfo?.phone || "Keine Telefonnummer gefunden.",
+            address: parsed.companyInfo?.address || "N/A",
+            phone: parsed.companyInfo?.phone || "N/A",
             comments: ''
         });
 
@@ -288,59 +232,50 @@ export default function App() {
         setActiveStep('topic_selection');
     } catch (err) { 
       setError(err.message || "Fehler bei der Live-Recherche."); 
-      setActiveStep('columbo'); 
+      setActiveStep('input_master'); 
     } 
     finally { setLoading(false); setProgress(0); }
   };
 
-  // --- PHASE 3: PITCH ENGINE (CONVERSION MAXIMIZED) ---
+  // --- PHASE 2: PITCH ENGINE (CONVERSION MAXIMIZED) ---
   const runContentEngine = async (topic) => {
     setSelectedTopic(topic);
     setActiveStep('generating'); setProgress(10); setProgressLabel(`Synthetisiere High-Converting Pitches für ${persona}...`); 
-    setLoadingItems({ pitch_direct: true, pitch_value: true, pitch_story: true, image: true });
+    setLoadingItems({ micro: true, mini: true, medium: true, image: true });
     setLoading(true); setError(null);
 
     const sourcesText = groundingSources.length > 0 ? groundingSources.map((s, i) => `[${i+1}] ${s.url || s.uri}`).join("\n") : "Keine URLs verfügbar.";
 
     try {
       let contextSetup = "";
-      if (campaignType === 'cold') {
+      if (campaignType === 'cold' || targetType === 'industrie') {
           contextSetup = `KALTAKQUISE. Aufhänger für die Nachricht ist AUSSCHLIESSLICH dieses aktuelle News-Thema: "${topic.title} - ${topic.rationale}".`;
       } else {
           let warmText = "";
           if (warmType === 'event') warmText = `Wir haben sie auf dem Event "${warmContext}" getroffen.`;
           if (warmType === 'lost_deal') warmText = `Wir hatten einen Lost Deal wegen: "${warmContext}".`;
           if (warmType === 'old_contact') warmText = `Letzter Kontakt: "${warmContext}".`;
-          
-          contextSetup = `BESTANDSKONTAKT REAKTIVIEREN. 
-          HISTORIE: ${warmText}
-          ZIEL: Verbinde diese alte Historie extrem elegant mit dem brandaktuellen News-Thema: "${topic.title} - ${topic.rationale}".`;
+          contextSetup = `BESTANDSKONTAKT REAKTIVIEREN. HISTORIE: ${warmText}. ZIEL: Verbinde diese alte Historie extrem elegant mit dem brandaktuellen News-Thema: "${topic.title}".`;
       }
 
-      // HIER IST DER NEUE CONVERSION PROMPT:
-      const textPrompt = `WICHTIG: Du bist Top-B2B-Sales-Experte für unsere IT-Lösung "ELWIS" (Enterprise Business/IT Transformation, stark geprägt von IBM DNA). 
-      Dein Ziel ist die Akquise VON "${targetCompany}". DU BIST NICHT DIE FIRMA "${targetCompany}"! Du pitchst AN sie.
+      const textPrompt = `WICHTIG: Du bist Top-B2B-Sales-Experte für IT/No-Code-Lösungen. Ziel: Akquise von "${targetName}".
       Ziel-Persona: "${persona}". Tonfall: "${tone}". User-Kontext: "${input}".
       ${contextSetup}
-      Nutze diese Quellen für Fakten: ${sourcesText}
+      Quellen: ${sourcesText}
 
-      AUFGABE: Erzeuge 3 Outreach-Pitches (Cold Email / LinkedIn Format).
-      MANDAT FÜR MAXIMALE CONVERSION: Schärfe alle Texte extrem auf Conversion! Du MUSST in jedem Pitch ganz konkrete Einsatzmöglichkeiten und Use Cases von ELWIS nennen, die EXAKT das Problem aus dem aktuellen News-Aufhänger ("${topic.title}") lösen. Keine hohlen "Lass uns reden"-Phrasen. Zeige sofort messbaren Wert durch die Implementierung von ELWIS.
+      AUFGABE: Erzeuge 3 konvertierende Outreach-Texte.
+      MANDAT: Schärfe alle Texte auf Conversion. Nenne konkrete Einsatzmöglichkeiten, die das Problem aus dem Aufhänger lösen.
 
-      1. "pitch_direct": Hard-Pitch. Aggressiv auf Schmerz und Lösung fokussiert. Nenne den ELWIS Use-Case messerscharf und fordere direkte Handlung.
-      2. "pitch_value": Consultative-Pitch. Fokus auf strategischen Mehrwert, Skalierung, Sicherheit und unsere IBM DNA als Fundament.
-      3. "pitch_story": Narrative-Pitch. Baut eine spannende Story um die News/Historie und führt elegant zur konkreten ELWIS-Implementierung als logische Konsequenz.
-      
-      ZUSATZAUFGABE (PREDICTIVE LOGIC):
-      Bewerte für JEDEN Pitch realistisch die Erfolgswahrscheinlichkeit (Chance in %) bei der gewählten Persona ("${persona}"). Gib einen kurzen Satz als Begründung.
-      
-      5. "visual": Englische Beschreibung für eine abstrakte B2B-Vektorgrafik (KEINE echten Firmennamen/Logos!).
+      1. "micro": Ein extrem kurzer, aggressiver Hook (max 190 Zeichen) für LinkedIn-Connect oder Slack.
+      2. "mini": Ein Snack-Post oder kurze Cold Email (max 3 Sätze). Messerscharf.
+      3. "medium": Ein Standard LinkedIn Post oder Strategie-Beitrag (ca. 2-3 Absätze) mit klarem Mehrwert.
+      4. "visual": Englische Beschreibung für eine abstrakte B2B-Vektorgrafik (KEINE echten Firmennamen/Logos!).
       
       JSON FORMAT: 
       {
-        "pitch_direct": {"text": "...", "chance": "85%", "reason": "..."},
-        "pitch_value": {"text": "...", "chance": "60%", "reason": "..."},
-        "pitch_story": {"text": "...", "chance": "40%", "reason": "..."},
+        "micro": "...",
+        "mini": "...",
+        "medium": "...",
         "visual": "..."
       }
       Sprache: Deutsch.`;
@@ -349,9 +284,9 @@ export default function App() {
       const data = parseJSON(res.candidates[0].content.parts[0].text);
       if(data) {
           setPosts({ 
-              pitch_direct: data.pitch_direct || {text: "Fehler", chance: "0%", reason: ""}, 
-              pitch_value: data.pitch_value || {text: "Fehler", chance: "0%", reason: ""}, 
-              pitch_story: data.pitch_story || {text: "Fehler", chance: "0%", reason: ""}, 
+              micro: data.micro || "Fehler.", 
+              mini: data.mini || "Fehler.", 
+              medium: data.medium || "Fehler.", 
               description: data.visual, 
               image: null 
           });
@@ -360,7 +295,7 @@ export default function App() {
       generateImage(data ? data.visual : "Corporate business transformation data, abstract shapes");
       setActiveStep('result');
     } catch (err) { setError("Generierung fehlgeschlagen."); setActiveStep('topic_selection'); } 
-    finally { setLoading(false); setLoadingItems({ pitch_direct: false, pitch_value: false, pitch_story: false, image: true }); setProgress(0); }
+    finally { setLoading(false); setLoadingItems({ micro: false, mini: false, medium: false, image: true }); setProgress(0); }
   };
 
   const generateImage = async (overridePrompt = null) => {
@@ -398,14 +333,14 @@ export default function App() {
   const archiveAsset = async () => {
     setLoading(true);
     try {
-      const name = `${targetCompany.replace(/[^a-zA-Z0-9]/g, "")}_Pitch`.substring(0, 20) || "Kampagne";
+      const name = `${targetName.replace(/[^a-zA-Z0-9]/g, "")}_Pitch`.substring(0, 20) || "Kampagne";
       const newAsset = { 
           id: Date.now(), 
           name: name, 
-          companyName: targetCompany,
+          companyName: targetName,
           ...posts, 
           topic: selectedTopic?.title || 'Unknown', 
-          allTopics: researchTopics,
+          allTopics: researchTopics, // WICHTIG: Alle Hooks speichern!
           scheduledDate: scheduleDate, 
           persona, 
           tone, 
@@ -430,7 +365,7 @@ export default function App() {
 
   const loadFromArchive = (item) => {
     setPosts(item);
-    setTargetCompany(item.companyName);
+    setTargetName(item.companyName);
     setPersona(item.persona);
     setTone(item.tone);
     setCampaignType(item.type);
@@ -460,13 +395,7 @@ export default function App() {
     );
   };
 
-  const ContentCard = ({ title, pitchData, type, icon: Icon, color }) => {
-    const text = pitchData?.text || "Warte auf Engine...";
-    const chance = pitchData?.chance || "N/A";
-    const reason = pitchData?.reason || "";
-    const numChance = parseInt(chance.replace('%', '')) || 0;
-    const chanceColor = numChance > 70 ? 'text-green-400' : numChance > 40 ? 'text-amber-400' : 'text-red-400';
-
+  const ContentCard = ({ title, text, type, icon: Icon, color }) => {
     return (
       <div className="bg-[#0F172A] border border-slate-800 rounded-[2.5rem] p-6 md:p-8 relative flex flex-col h-full shadow-2xl transition-all hover:border-blue-500/40 group w-full min-w-0">
         <div className={`absolute top-0 left-0 w-2 h-full ${color} rounded-l-[2.5rem]`}></div>
@@ -479,18 +408,9 @@ export default function App() {
             {copiedType === type ? <Check size={18} className="text-green-400" /> : <Copy size={18} />}
           </button>
         </div>
-        {chance !== "N/A" && !loadingItems[type] && (
-            <div className="mb-4 pl-4 flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                    <Activity size={14} className={chanceColor} />
-                    <span className={`text-xs font-black uppercase tracking-widest ${chanceColor}`}>Win-Rate: {chance}</span>
-                </div>
-                <span className="text-[10px] text-slate-500 italic opacity-80">{reason}</span>
-            </div>
-        )}
-        <div className="bg-black/50 p-6 rounded-3xl border border-slate-800 flex-1 overflow-y-auto relative ml-4 min-h-[150px]">
+        <div className="bg-black/50 p-6 rounded-3xl border border-slate-800 flex-1 overflow-y-auto relative ml-4 min-h-[100px]">
           {loadingItems[type] && <div className="absolute inset-0 bg-[#0F172A]/90 flex items-center justify-center z-10 rounded-3xl"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}
-          <p className="text-slate-200 leading-relaxed whitespace-pre-wrap break-words text-sm">{text}</p>
+          <p className="text-slate-200 leading-relaxed whitespace-pre-wrap break-words text-sm">{text || "Warte auf Engine..."}</p>
         </div>
       </div>
     );
@@ -502,6 +422,15 @@ export default function App() {
   return (
     <div className="min-h-screen w-full bg-[#020617] text-slate-200 font-sans selection:bg-blue-600/40 overflow-x-hidden">
       
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        .cursor-zoom-in { cursor: zoom-in; }
+        .custom-scrollbar::-webkit-scrollbar { height: 4px; width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+      `}} />
+
       {zoomedImage && (
         <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-6 animate-in fade-in" onClick={() => setZoomedImage(null)}>
           <button className="absolute top-8 right-8 text-white/50 hover:text-white p-2 bg-white/10 rounded-full transition-all"><X size={32}/></button>
@@ -509,26 +438,21 @@ export default function App() {
         </div>
       )}
 
-      {/* --- FLUID NAVIGATION HEADER --- */}
+      {/* --- HEADER --- */}
       <header className="sticky top-0 z-50 bg-[#020617]/95 backdrop-blur-xl border-b border-slate-800 p-3 md:p-4 md:px-10 flex justify-between items-center w-full shadow-2xl">
         <div className="flex items-center gap-3 md:gap-6">
-          
           <div className="flex bg-black/40 border border-slate-800 rounded-full p-1 shadow-inner items-center">
             <button onClick={handleBack} disabled={!canGoBack} className={`p-2 rounded-full transition-all ${canGoBack ? 'text-slate-300 hover:text-white hover:bg-slate-800' : 'text-slate-800 cursor-not-allowed'}`} title="Einen Schritt zurück">
               <ArrowLeft size={16} />
-            </button>
-            <button onClick={handleForward} disabled={!canGoForward()} className={`p-2 rounded-full transition-all ${canGoForward() ? 'text-slate-300 hover:text-white hover:bg-slate-800' : 'text-slate-800 cursor-not-allowed'}`} title="Einen Schritt vor">
-              <ArrowRight size={16} />
             </button>
             <div className="w-px h-4 bg-slate-800 mx-1"></div>
             <button onClick={resetEngine} className="p-2 rounded-full text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-all" title="Neu Starten">
               <RotateCcw size={16} />
             </button>
           </div>
-
           <div className="hidden sm:flex flex-col">
             <h1 className="text-sm font-black uppercase tracking-[0.4em] text-white italic">ELWIS LAB</h1>
-            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v22.0 | CONVERSION ENGINE</span>
+            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest leading-none mt-1">v24.0 | LINEAR CONVERSION</span>
           </div>
         </div>
         <button onClick={() => { if(activeStep !== 'library') setLastStep(activeStep); setActiveStep('library'); }} className="p-3 md:p-4 bg-slate-800 rounded-2xl border border-slate-700 relative hover:bg-slate-700 transition-all flex items-center gap-3">
@@ -540,7 +464,7 @@ export default function App() {
 
       <main className="max-w-[1400px] mx-auto p-4 md:p-8 lg:p-10 w-full flex flex-col flex-1">
         
-        {/* === STEP 1: SINGLE VECTOR INPUT === */}
+        {/* === STEP 1: SINGLE VECTOR INPUT (LINEAR) === */}
         {activeStep === 'input_master' && (
           <div className="max-w-4xl mx-auto w-full space-y-8 md:space-y-12 animate-in slide-in-from-bottom-10 pt-6 md:pt-10 flex-1 pb-40">
             <div className="text-center space-y-4 md:space-y-5">
@@ -555,34 +479,52 @@ export default function App() {
                     <div className="p-6 md:p-20 text-center space-y-6 relative z-10 animate-in zoom-in duration-300">
                         <ShieldAlert className="mx-auto text-red-500" size={56} />
                         <h3 className="text-2xl md:text-3xl font-black text-white uppercase italic tracking-tighter">Access Denied.</h3>
-                        <p className="text-red-400 font-bold text-xs md:text-sm leading-relaxed max-w-md mx-auto">Die B2B-Relevanzprüfung ist fehlgeschlagen. Bitte gib ein seriöses Zielunternehmen oder eine Industrie ein.</p>
-                        <button onClick={() => {setSafetyTriggered(false); setTargetCompany('');}} className="mt-8 px-8 py-4 md:px-10 md:py-5 bg-white text-slate-900 rounded-full font-black text-[10px] md:text-[11px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">Zurück zum Input</button>
+                        <p className="text-red-400 font-bold text-xs md:text-sm leading-relaxed max-w-md mx-auto">Die B2B-Relevanzprüfung ist fehlgeschlagen. Bitte gib ein seriöses Zielunternehmen oder Thema ein.</p>
+                        <button onClick={() => {setSafetyTriggered(false); setTargetName('');}} className="mt-8 px-8 py-4 md:px-10 md:py-5 bg-white text-slate-900 rounded-full font-black text-[10px] md:text-[11px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">Zurück zum Input</button>
                     </div>
                 ) : (
                     <>
-                        {/* 1) Firmenname */}
+                        {/* 1) Ziel-Typ */}
                         <div className="space-y-3 md:space-y-4 relative z-10">
+                            <p className="text-[10px] md:text-[12px] font-black text-slate-400 uppercase tracking-[0.4em] pl-2 md:pl-4">1) Ziel-Typ wählen</p>
+                            <div className="flex gap-2 md:gap-4 w-full">
+                                <HorizontalButton active={targetType === 'firma'} onClick={() => {setTargetType('firma'); setTargetName('');}} icon={Building2} label="Firma" />
+                                <HorizontalButton active={targetType === 'industrie'} onClick={() => {setTargetType('industrie'); setTargetName(''); setCampaignType('cold');}} icon={Factory} label="Industrie" />
+                                <HorizontalButton active={targetType === 'persona'} onClick={() => {setTargetType('persona'); setTargetName('');}} icon={User} label="Persona/Rolle" />
+                            </div>
+                        </div>
+
+                        {/* 2) Ziel-Name */}
+                        <div className="space-y-3 md:space-y-4 relative z-10 pt-4 md:pt-6 border-t border-slate-800">
                             <div className="flex items-center justify-between pl-2 md:pl-4">
-                                <label className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-400 block">1) Ziel-Firma</label>
-                                <span className="text-[8px] md:text-[9px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-1"><ShieldCheck size={10} md:size={12}/> Geprüft</span>
+                                <label className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.4em] text-slate-400 block">
+                                  {targetType === 'firma' ? '2) Name der Firma' : targetType === 'industrie' ? '2) Welche Industrie?' : '2) Spezifische Rolle / Position'}
+                                </label>
                             </div>
                             <div className="relative">
-                                <Building2 className={`absolute left-4 md:left-6 top-1/2 -translate-y-1/2 ${campaignType === 'warm' ? 'text-purple-500' : 'text-blue-500'} transition-colors`} size={20} />
-                                <input type="text" className={`w-full p-4 md:p-8 pl-12 md:pl-16 bg-black border-2 border-slate-800 rounded-2xl md:rounded-[2.5rem] outline-none text-lg md:text-2xl font-black text-white placeholder:text-slate-700 transition-all shadow-inner uppercase tracking-wide focus:border-${campaignType === 'warm' ? 'purple' : 'blue'}-600`} placeholder="Z.B. Siemens..." value={targetCompany} onChange={(e) => setTargetCompany(e.target.value)} />
+                                <Search className={`absolute left-4 md:left-6 top-1/2 -translate-y-1/2 ${campaignType === 'warm' ? 'text-purple-500' : 'text-blue-500'} transition-colors`} size={20} />
+                                <input type="text" 
+                                  className={`w-full p-4 md:p-8 pl-12 md:pl-16 bg-black border-2 border-slate-800 rounded-2xl md:rounded-[2.5rem] outline-none text-lg md:text-2xl font-black text-white placeholder:text-slate-700 transition-all shadow-inner uppercase tracking-wide ${campaignType === 'warm' ? 'focus:border-purple-600' : 'focus:border-blue-600'}`} 
+                                  placeholder={targetType === 'firma' ? "Z.B. Siemens, SAP..." : targetType === 'industrie' ? "Z.B. Logistik, FinTech..." : "Z.B. CTO, Head of Sales..."} 
+                                  value={targetName} 
+                                  onChange={(e) => setTargetName(e.target.value)} 
+                                />
                             </div>
                         </div>
 
-                        {/* 2) Angriffsvektor */}
-                        <div className="space-y-3 md:space-y-4 relative z-10 pt-4 md:pt-6 border-t border-slate-800">
-                            <p className="text-[10px] md:text-[12px] font-black text-slate-400 uppercase tracking-[0.4em] pl-2 md:pl-4">2) Angriffsvektor</p>
-                            <div className="flex gap-2 md:gap-4 w-full">
-                                <HorizontalButton active={campaignType === 'cold'} onClick={() => setCampaignType('cold')} icon={Search} label="Kalt" color="blue" />
-                                <HorizontalButton active={campaignType === 'warm'} onClick={() => setCampaignType('warm')} icon={Users} label="Warm" color="purple" />
-                            </div>
-                        </div>
+                        {/* 3) Angriffsvektor (Ausgeblendet bei Industrie) */}
+                        {targetType !== 'industrie' && (
+                          <div className="space-y-3 md:space-y-4 relative z-10 pt-4 md:pt-6 border-t border-slate-800">
+                              <p className="text-[10px] md:text-[12px] font-black text-slate-400 uppercase tracking-[0.4em] pl-2 md:pl-4">3) Angriffsvektor</p>
+                              <div className="flex gap-2 md:gap-4 w-full">
+                                  <HorizontalButton active={campaignType === 'cold'} onClick={() => setCampaignType('cold')} icon={Search} label="Kaltakquise" color="blue" />
+                                  <HorizontalButton active={campaignType === 'warm'} onClick={() => setCampaignType('warm')} icon={Users} label="Reaktivierung (Warm)" color="purple" />
+                              </div>
+                          </div>
+                        )}
 
-                        {/* 2.1) Conditional: Wenn Warm */}
-                        {campaignType === 'warm' && (
+                        {/* 3.1) Conditional: Wenn Warm */}
+                        {campaignType === 'warm' && targetType !== 'industrie' && (
                             <div className="space-y-4 md:space-y-6 relative z-10 p-4 md:p-6 bg-purple-900/10 rounded-[1.5rem] md:rounded-[2rem] border border-purple-900/30 animate-in zoom-in-95 duration-300">
                                 <p className="text-[9px] md:text-[10px] font-black text-purple-400 uppercase tracking-[0.5em] flex items-center gap-2"><AlertTriangle size={12}/> Zwingend für Reaktivierung</p>
                                 <div className="flex gap-2 md:gap-4 w-full">
@@ -599,18 +541,18 @@ export default function App() {
                             </div>
                         )}
 
-                        {/* 3) Persona & Tone */}
+                        {/* 4) Persona & Tone inkl. Predictive Logic */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 md:gap-8 relative z-10 pt-4 md:pt-6 border-t border-slate-800">
                             <div className="space-y-3 md:space-y-4">
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] pl-2 md:pl-4">3) Persona</p>
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] pl-2 md:pl-4">4) Empfänger-Persona</p>
                                 <div className="flex flex-row sm:flex-col gap-2 md:gap-3 w-full overflow-x-auto pb-2 sm:pb-0 custom-scrollbar">
                                     <HorizontalButton active={persona === 'Geschäftsführung'} onClick={() => setPersona('Geschäftsführung')} icon={Briefcase} label="C-Level" />
-                                    <HorizontalButton active={persona === 'Tech Lead'} onClick={() => setPersona('Tech Lead')} icon={Network} label="IT Lead" />
-                                    <HorizontalButton active={persona === 'Betriebsleiter'} onClick={() => setPersona('Betriebsleiter')} icon={Target} label="Ops" />
+                                    <HorizontalButton active={persona === 'Tech Lead'} onClick={() => setPersona('Tech Lead')} icon={Network} label="Tech Lead" />
+                                    <HorizontalButton active={persona === 'Betriebsleiter'} onClick={() => setPersona('Betriebsleiter')} icon={Target} label="Ops Manager" />
                                 </div>
                             </div>
                             <div className="space-y-3 md:space-y-4">
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] pl-2 md:pl-4">4) Tonfall</p>
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] pl-2 md:pl-4">5) Tonalität (Tonfall)</p>
                                 <div className="flex flex-row sm:flex-col gap-2 md:gap-3 w-full overflow-x-auto pb-2 sm:pb-0 custom-scrollbar">
                                     <HorizontalButton active={tone === 'Analytisch'} onClick={() => setTone('Analytisch')} icon={BarChart3} label="Analytisch" />
                                     <HorizontalButton active={tone === 'Visionär'} onClick={() => setTone('Visionär')} icon={Lightbulb} label="Visionär" />
@@ -619,20 +561,35 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* 5) Freifeld Kontext */}
+                        {/* PREDICTIVE LOGIC DISPLAY */}
+                        <div className="bg-black/50 border border-slate-800 p-5 md:p-6 rounded-2xl relative z-10 flex flex-col md:flex-row gap-4 items-center mt-6">
+                            <div className="p-4 bg-slate-900 rounded-full border border-slate-800">
+                                <Activity size={24} className={chanceColor} />
+                            </div>
+                            <div className="flex-1 text-center md:text-left">
+                                <h4 className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-400 mb-1">KI-Prognose: {persona} + {tone}</h4>
+                                <p className="text-sm text-slate-300 italic">{prediction.text}</p>
+                            </div>
+                            <div className="text-center">
+                                <span className={`text-2xl md:text-3xl font-black ${chanceColor}`}>{prediction.rate}%</span>
+                                <p className="text-[8px] uppercase tracking-widest text-slate-500">Est. Win-Rate</p>
+                            </div>
+                        </div>
+
+                        {/* 6) Freifeld Kontext */}
                         <div className="space-y-3 md:space-y-4 relative z-10 pt-4 md:pt-6 border-t border-slate-800">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] pl-2 md:pl-4 block">5) Kontext</label>
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] pl-2 md:pl-4 block">6) Strategischer Kontext</label>
                             <textarea 
-                                className={`w-full p-4 md:p-6 bg-black border-2 border-slate-800 rounded-2xl md:rounded-[2.5rem] outline-none text-sm md:text-lg text-white placeholder:text-slate-700 transition-all shadow-inner resize-none h-24 md:h-32 focus:border-${campaignType === 'warm' ? 'purple' : 'blue'}-600`}
-                                placeholder="Optional, je mehr desto besser..."
+                                className={`w-full p-4 md:p-6 bg-black border-2 border-slate-800 rounded-2xl md:rounded-[2.5rem] outline-none text-sm md:text-lg text-white placeholder:text-slate-700 transition-all shadow-inner resize-none h-24 md:h-32 ${campaignType === 'warm' ? 'focus:border-purple-600' : 'focus:border-blue-600'}`}
+                                placeholder="Optional, aber je mehr Details desto besser..."
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                             />
                         </div>
 
                         {/* LET'S GO BUTTON */}
-                        <button onClick={startColumbo} disabled={loading || !targetCompany.trim()} className={`w-full text-white py-6 md:py-10 rounded-2xl md:rounded-[3.5rem] font-black text-xs md:text-sm uppercase tracking-[0.3em] md:tracking-[0.4em] flex items-center justify-center gap-3 md:gap-4 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none relative z-20 mt-4 md:mt-8 ${campaignType === 'warm' ? 'bg-purple-600 hover:bg-purple-500 shadow-[0_10px_30px_-10px_rgba(147,51,234,0.5)] md:shadow-[0_20px_50px_-10px_rgba(147,51,234,0.5)]' : 'bg-blue-600 hover:bg-blue-500 shadow-[0_10px_30px_-10px_rgba(37,99,235,0.5)] md:shadow-[0_20px_50px_-10px_rgba(37,99,235,0.5)]'}`}>
-                          {loading ? <Loader2 className="animate-spin" size={20} /> : <Zap size={20} />} ENGINE STARTEN
+                        <button onClick={startResearch} disabled={loading || !targetName.trim()} className={`w-full text-white py-6 md:py-10 rounded-2xl md:rounded-[3.5rem] font-black text-xs md:text-sm uppercase tracking-[0.3em] md:tracking-[0.4em] flex items-center justify-center gap-3 md:gap-4 transition-all active:scale-[0.98] disabled:opacity-20 disabled:shadow-none relative z-20 mt-4 md:mt-8 ${campaignType === 'warm' ? 'bg-purple-600 hover:bg-purple-500 shadow-[0_10px_30px_-10px_rgba(147,51,234,0.5)] md:shadow-[0_20px_50px_-10px_rgba(147,51,234,0.5)]' : 'bg-blue-600 hover:bg-blue-500 shadow-[0_10px_30px_-10px_rgba(37,99,235,0.5)] md:shadow-[0_20px_50px_-10px_rgba(37,99,235,0.5)]'}`}>
+                          {loading ? <Loader2 className="animate-spin" size={20} /> : <Zap size={20} />} LIVE-RECHERCHE STARTEN
                         </button>
                     </>
                 )}
@@ -640,41 +597,7 @@ export default function App() {
           </div>
         )}
 
-        {/* === STEP 2: COLUMBO NOIR === */}
-        {activeStep === 'columbo' && (
-          <div className="max-w-4xl mx-auto w-full animate-in zoom-in duration-700 flex-1 pb-32 pt-6 md:pt-10">
-            <div className={`bg-[#0F172A] rounded-[3rem] md:rounded-[5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,1)] overflow-hidden relative border border-slate-800`}>
-                <div className={`relative h-[15rem] md:h-[25rem] w-full border-b-[4px] md:border-b-[8px] ${campaignType === 'warm' ? 'border-purple-600' : 'border-blue-600'}`}>
-                    <img src={columboImageUrl} alt="Noir Bar" className="w-full h-full object-cover grayscale contrast-125 brightness-[0.6] scale-105" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent opacity-100"></div>
-                </div>
-                
-                <div className="p-6 md:p-16 -mt-16 md:-mt-24 relative bg-[#0F172A] rounded-t-[3rem] md:rounded-t-[5rem] text-center space-y-8 md:space-y-10">
-                    <div className="inline-block bg-slate-800 px-6 py-2 md:px-8 md:py-3 rounded-full shadow-2xl border border-slate-700">
-                        <h2 className="text-xs md:text-sm font-black uppercase tracking-widest text-slate-300">Just one more thing...</h2>
-                    </div>
-                    <p className={`text-xl sm:text-2xl md:text-4xl font-bold text-white italic border-l-4 md:border-l-8 pl-4 md:pl-8 text-left leading-relaxed tracking-tight ${campaignType === 'warm' ? 'border-purple-600' : 'border-blue-600'}`}>"{columboData.question}"</p>
-                    
-                    <div className="grid grid-cols-1 gap-4 md:gap-5 pt-2 md:pt-4">
-                        {columboData.options && columboData.options.map((opt, i) => (
-                            <button key={i} onClick={() => startResearch(opt)} className={`bg-slate-900/50 text-white p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] text-xs sm:text-sm md:text-lg font-black transition-all border border-slate-800 flex items-center justify-between group px-6 md:px-10 shadow-lg text-left ${campaignType === 'warm' ? 'hover:bg-purple-600 hover:border-purple-500' : 'hover:bg-blue-600 hover:border-blue-500'}`}>
-                                <span className="line-clamp-2">{opt}</span> <ChevronRight size={20} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-2 transition-all text-slate-200 flex-shrink-0 ml-2 md:ml-4" />
-                            </button>
-                        ))}
-                        <div className="space-y-4 md:space-y-6 mt-6 md:mt-8 pt-6 md:pt-8 border-t border-slate-800 text-left">
-                            <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 ml-2 md:ml-4 mb-1 md:mb-2 block">Eigener strategischer Fokus</label>
-                            <textarea className={`w-full p-5 md:p-8 bg-black border-2 border-slate-800 rounded-2xl md:rounded-[3rem] font-bold outline-none text-white text-sm md:text-lg shadow-inner resize-none focus:border-${campaignType === 'warm' ? 'purple' : 'blue'}-600 min-h-[100px] md:min-h-[120px]`} placeholder="Details hinzufügen..." value={columboAnswer} onChange={(e) => setColumboAnswer(e.target.value)} />
-                            <button onClick={() => startResearch(columboAnswer)} disabled={loading || !columboAnswer.trim()} className={`w-full text-white py-5 md:py-8 rounded-2xl md:rounded-[3.5rem] font-black uppercase text-xs md:text-sm flex items-center justify-center gap-3 md:gap-4 hover:scale-[1.02] transition-all tracking-[0.2em] md:tracking-[0.4em] disabled:opacity-30 disabled:scale-100 ${campaignType === 'warm' ? 'bg-purple-600 hover:bg-purple-500 shadow-[0_15px_30px_-10px_rgba(147,51,234,0.4)]' : 'bg-blue-600 hover:bg-blue-500 shadow-[0_15px_30px_-10px_rgba(37,99,235,0.4)]'}`}>
-                                {loading ? <Loader2 className="animate-spin" size={18}/> : <Search size={18}/>} LIVE-RECHERCHE STARTEN
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-          </div>
-        )}
-
-        {/* === STEP 3: DOSSIER & TOPIC SELECTION (DIE SECRET SAUCE) === */}
+        {/* === STEP 2: DOSSIER & TOPIC SELECTION (DIE SECRET SAUCE) === */}
         {activeStep === 'topic_selection' && (
           <div className="w-full animate-in zoom-in duration-500 flex-1 pb-32 pt-4 flex flex-col lg:flex-row gap-6 md:gap-8">
             {/* LINKS: FIRMEN-DOSSIER */}
@@ -682,26 +605,34 @@ export default function App() {
                 <div className="bg-[#0F172A] border border-slate-800 rounded-[2rem] md:rounded-[3rem] p-6 md:p-8 shadow-2xl flex flex-col h-full relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-24 h-24 md:w-32 md:h-32 bg-slate-800/50 rounded-full blur-[40px] md:blur-[50px]"></div>
                     <h2 className="text-lg md:text-xl font-black text-white uppercase tracking-widest border-b border-slate-800 pb-3 md:pb-4 mb-4 md:mb-6 flex items-center gap-3">
-                        <Building2 size={18} className={campaignType === 'warm' ? 'text-purple-500' : 'text-blue-500'}/> Firmen-Dossier
+                        <Building2 size={18} className={campaignType === 'warm' ? 'text-purple-500' : 'text-blue-500'}/> Info-Dossier
                     </h2>
                     <div className="space-y-4 md:space-y-6 flex-1 relative z-10">
-                        <div className="space-y-1 md:space-y-2">
-                            <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 flex items-center gap-2"><MapPin size={10}/> Zentrale</label>
-                            <p className="text-xs md:text-sm font-medium text-slate-300 bg-black/50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-800 leading-relaxed">{companyData.address || 'Keine Adresse gefunden.'}</p>
-                        </div>
-                        <div className="space-y-1 md:space-y-2">
-                            <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 flex items-center gap-2"><Phone size={10}/> Telefon</label>
-                            <div className="flex items-center gap-2 md:gap-3">
-                                <p className="text-sm md:text-lg font-bold text-white bg-black/50 px-3 py-2 md:px-4 md:py-3 rounded-xl md:rounded-2xl border border-slate-800 flex-1 truncate">{companyData.phone || 'N/A'}</p>
-                                {companyData.phone && companyData.phone !== 'N/A' && (
-                                    <button onClick={() => navigator.clipboard.writeText(companyData.phone)} className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-colors ${campaignType === 'warm' ? 'bg-purple-600/20 text-purple-400 hover:bg-purple-600 hover:text-white' : 'bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white'}`}><Copy size={16}/></button>
-                                )}
+                        {targetType === 'firma' ? (
+                            <>
+                                <div className="space-y-1 md:space-y-2">
+                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 flex items-center gap-2"><MapPin size={10}/> Zentrale</label>
+                                    <p className="text-xs md:text-sm font-medium text-slate-300 bg-black/50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-800 leading-relaxed">{companyData.address || 'Keine Adresse gefunden.'}</p>
+                                </div>
+                                <div className="space-y-1 md:space-y-2">
+                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 flex items-center gap-2"><Phone size={10}/> Telefon</label>
+                                    <div className="flex items-center gap-2 md:gap-3">
+                                        <p className="text-sm md:text-lg font-bold text-white bg-black/50 px-3 py-2 md:px-4 md:py-3 rounded-xl md:rounded-2xl border border-slate-800 flex-1 truncate">{companyData.phone || 'N/A'}</p>
+                                        {companyData.phone && companyData.phone !== 'N/A' && (
+                                            <button onClick={() => navigator.clipboard.writeText(companyData.phone)} className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-colors ${campaignType === 'warm' ? 'bg-purple-600/20 text-purple-400 hover:bg-purple-600 hover:text-white' : 'bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white'}`}><Copy size={16}/></button>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="bg-blue-900/10 border border-blue-800/30 p-4 rounded-2xl text-blue-400 text-xs italic">
+                                Zieltyp ist {targetType}. Keine spezifischen Impressumsdaten erforderlich.
                             </div>
-                        </div>
+                        )}
                         <div className="space-y-1 md:space-y-2 flex-1 flex flex-col">
                             <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 flex items-center gap-2"><StickyNote size={10}/> Notizen</label>
                             <textarea 
-                                className={`w-full flex-1 min-h-[80px] md:min-h-[120px] p-3 md:p-4 bg-slate-900 border-2 border-slate-800 rounded-xl md:rounded-2xl text-slate-300 outline-none text-xs md:text-sm transition-colors resize-none focus:border-${campaignType === 'warm' ? 'purple' : 'blue'}-600`}
+                                className={`w-full flex-1 min-h-[80px] md:min-h-[120px] p-3 md:p-4 bg-slate-900 border-2 border-slate-800 rounded-xl md:rounded-2xl text-slate-300 outline-none text-xs md:text-sm transition-colors resize-none ${campaignType === 'warm' ? 'focus:border-purple-600' : 'focus:border-blue-600'}`}
                                 placeholder="Eigene Notizen hier eintragen..."
                                 value={companyData.comments}
                                 onChange={(e) => setCompanyData({...companyData, comments: e.target.value})}
@@ -717,7 +648,7 @@ export default function App() {
                     <h2 className={`text-xl sm:text-2xl md:text-3xl font-black text-white italic tracking-tighter uppercase border-l-4 md:border-l-8 pl-4 md:pl-6 ${campaignType === 'warm' ? 'border-purple-600' : 'border-blue-600'}`}>
                         Aktuelle Themen
                     </h2>
-                    <p className="text-slate-400 pl-5 md:pl-8 text-xs md:text-sm">Wähle einen recherchierten Aufhänger, um die Pitch-Matrix zu generieren.</p>
+                    <p className="text-slate-400 pl-5 md:pl-8 text-xs md:text-sm">Wähle einen recherchierten Aufhänger, um die Content-Matrix zu generieren.</p>
                 </div>
 
                 <div className="grid gap-3 md:gap-5">
@@ -728,7 +659,7 @@ export default function App() {
                                 <p className="text-slate-400 text-xs md:text-sm leading-relaxed line-clamp-3 sm:line-clamp-none">{topic.rationale}</p>
                             </div>
                             <button onClick={() => runContentEngine(topic)} className={`w-full sm:w-auto px-6 py-4 md:px-8 md:py-5 border rounded-xl md:rounded-2xl font-black uppercase text-[9px] md:text-[10px] tracking-[0.2em] md:tracking-[0.3em] transition-all flex-shrink-0 flex items-center justify-center gap-2 ${campaignType === 'warm' ? 'bg-purple-600/10 text-purple-400 border-purple-600/30 hover:bg-purple-600 hover:text-white' : 'bg-blue-600/10 text-blue-400 border-blue-600/30 hover:bg-blue-600 hover:text-white'}`}>
-                                Pitches erstellen <ChevronRight size={14} />
+                                Content erstellen <ChevronRight size={14} />
                             </button>
                         </div>
                     ))}
@@ -754,7 +685,7 @@ export default function App() {
           </div>
         )}
 
-        {/* === STEP 4: LOADING === */}
+        {/* === STEP 3: LOADING === */}
         {activeStep === 'generating' && (
           <div className="max-w-md md:max-w-2xl mx-auto py-32 md:py-56 space-y-10 md:space-y-16 text-center animate-in fade-in flex-1 px-4">
             <div className="relative inline-flex items-center justify-center scale-110 md:scale-[2] mb-8 md:mb-16">
@@ -773,7 +704,7 @@ export default function App() {
           </div>
         )}
 
-        {/* === STEP 5: RESULTS (DIE PITCH MATRIX & STICKY SAVE BAR) === */}
+        {/* === STEP 4: RESULTS (MATRIX & STICKY SAVE BAR) === */}
         {activeStep === 'result' && (
           <div className="flex flex-col animate-in fade-in slide-in-from-bottom-10 pb-48 w-full pt-4 md:pt-8 relative">
             
@@ -782,16 +713,16 @@ export default function App() {
                 <div className="lg:col-span-7 space-y-6 md:space-y-10">
                   {/* Info Bar */}
                   <div className="flex flex-col sm:flex-row gap-3 md:gap-4 p-4 md:p-6 bg-[#0F172A] border border-slate-800 rounded-2xl md:rounded-[2.5rem] items-center shadow-xl md:shadow-2xl">
-                     <div className="flex flex-col flex-1 px-2 md:px-4 sm:border-r border-slate-700 w-full text-center sm:text-left"><span className="text-[8px] md:text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Target</span><span className={`text-xs md:text-sm font-bold truncate ${campaignType === 'warm' ? 'text-purple-400' : 'text-blue-400'}`}>{targetCompany}</span></div>
+                     <div className="flex flex-col flex-1 px-2 md:px-4 sm:border-r border-slate-700 w-full text-center sm:text-left"><span className="text-[8px] md:text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Target</span><span className={`text-xs md:text-sm font-bold truncate ${campaignType === 'warm' ? 'text-purple-400' : 'text-blue-400'}`}>{targetName}</span></div>
                      <div className="flex flex-col flex-1 px-2 md:px-4 sm:border-r border-slate-700 w-full text-center sm:text-left"><span className="text-[8px] md:text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Persona</span><span className="text-xs md:text-sm text-white font-bold">{persona}</span></div>
-                     <div className="flex flex-col flex-1 px-2 md:px-4 w-full text-center sm:text-left"><span className="text-[8px] md:text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Context</span><span className="text-xs md:text-sm text-white font-bold truncate">{campaignType === 'warm' ? (warmType === 'event' ? 'Messe' : warmType === 'lost_deal' ? 'Lost Deal' : 'Refresh') : selectedTopic?.title}</span></div>
+                     <div className="flex flex-col flex-1 px-2 md:px-4 w-full text-center sm:text-left"><span className="text-[8px] md:text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Tone</span><span className="text-xs md:text-sm text-white font-bold truncate">{tone}</span></div>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-                     <ContentCard title="Hard Pitch (Direkt)" pitchData={posts.pitch_direct} type="pitch_direct" icon={Crosshair} color="bg-red-500" />
-                     <ContentCard title="Value Pitch (Mehrwert)" pitchData={posts.pitch_value} type="pitch_value" icon={BarChart3} color="bg-blue-500" />
+                     <ContentCard title="Micro Hook (Direkt)" text={posts.micro} type="micro" icon={Crosshair} color="bg-red-500" />
+                     <ContentCard title="Mini Snack (Mehrwert)" text={posts.mini} type="mini" icon={BarChart3} color="bg-blue-500" />
                   </div>
-                  <ContentCard title="Narrative Pitch (Story/News)" pitchData={posts.pitch_story} type="pitch_story" icon={AlignJustify} color="bg-purple-500" />
+                  <ContentCard title="Medium LinkedIn Post" text={posts.medium} type="medium" icon={AlignJustify} color="bg-purple-500" />
                 </div>
                 
                 {/* DAS DOSSIER & VISUAL (Rechte Spalte) */}
@@ -800,7 +731,7 @@ export default function App() {
                     
                     {/* DOSSIER RECAP */}
                     <div className="mb-6 md:mb-8 space-y-3 md:space-y-4 bg-black/40 p-4 md:p-6 rounded-2xl md:rounded-3xl border border-slate-800">
-                        <h3 className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 md:mb-2 border-b border-slate-800 pb-2">Unternehmensdaten</h3>
+                        <h3 className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 md:mb-2 border-b border-slate-800 pb-2">Zieldaten</h3>
                         <div className="flex items-start gap-2 md:gap-3">
                             <Phone size={12} className="text-slate-400 mt-1 flex-shrink-0" />
                             <span className="text-xs md:text-sm font-bold text-white">{companyData.phone || 'N/A'}</span>
@@ -827,7 +758,7 @@ export default function App() {
                         <textarea 
                             value={customImagePrompt} 
                             onChange={(e) => setCustomImagePrompt(e.target.value)}
-                            className={`w-full p-3 md:p-4 bg-slate-900 border-2 border-slate-800 rounded-xl md:rounded-2xl text-slate-300 outline-none text-[10px] md:text-xs transition-colors h-20 md:h-24 resize-none pointer-events-auto focus:border-${campaignType === 'warm' ? 'purple' : 'blue'}-600`}
+                            className={`w-full p-3 md:p-4 bg-slate-900 border-2 border-slate-800 rounded-xl md:rounded-2xl text-slate-300 outline-none text-[10px] md:text-xs transition-colors h-20 md:h-24 resize-none pointer-events-auto ${campaignType === 'warm' ? 'focus:border-purple-600' : 'focus:border-blue-600'}`}
                             placeholder="Beschreibe das Bild auf Englisch..."
                         />
                         <button onClick={() => generateImage(customImagePrompt)} disabled={loadingItems.image} className={`w-full py-2.5 md:py-3 rounded-lg md:rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] flex items-center justify-center gap-2 transition-all ${campaignType === 'warm' ? 'bg-purple-900/40 text-purple-400 hover:bg-purple-600 hover:text-white' : 'bg-blue-900/40 text-blue-400 hover:bg-blue-600 hover:text-white'}`}>
@@ -849,7 +780,7 @@ export default function App() {
                         </div>
                         <div className="flex-1 flex items-center md:items-start md:flex-col gap-2 md:gap-1">
                             <label className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-slate-500 block pl-1 md:pl-2 whitespace-nowrap">Schedule Date</label>
-                            <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} className={`flex-1 w-full px-3 py-2 md:px-5 md:py-3 bg-black border-2 border-slate-800 rounded-lg md:rounded-2xl text-white outline-none text-xs md:text-sm font-bold transition-colors focus:border-${campaignType === 'warm' ? 'purple' : 'blue'}-600`} />
+                            <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} className={`flex-1 w-full px-3 py-2 md:px-5 md:py-3 bg-black border-2 border-slate-800 rounded-lg md:rounded-2xl text-white outline-none text-xs md:text-sm font-bold transition-colors ${campaignType === 'warm' ? 'focus:border-purple-600' : 'focus:border-blue-600'}`} />
                         </div>
                     </div>
 
@@ -867,7 +798,7 @@ export default function App() {
           </div>
         )}
 
-        {/* === STEP 6: VAULT / CRM === */}
+        {/* === STEP 5: VAULT / CRM === */}
         {activeStep === 'library' && (
           <div className="flex flex-col lg:flex-row gap-6 md:gap-8 pb-32 pt-6 md:pt-10 h-auto lg:h-[calc(100vh-100px)]">
             
@@ -923,7 +854,7 @@ export default function App() {
                                         </div>
                                     </div>
                                     <div className="flex gap-2 w-full sm:w-auto justify-end">
-                                        <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-900 px-2 py-1 md:px-3 md:py-1.5 rounded-md md:rounded-lg border border-slate-800">{item.companySize || 'N/A'}</span>
+                                        <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-900 px-2 py-1 md:px-3 md:py-1.5 rounded-md md:rounded-lg border border-slate-800">{item.tone}</span>
                                         <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-blue-400 bg-blue-900/20 px-2 py-1 md:px-3 md:py-1.5 rounded-md md:rounded-lg border border-blue-900/50">{item.persona}</span>
                                         <button onClick={() => setAssetLibrary(assetLibrary.filter(a => a.id !== item.id))} className="text-slate-600 hover:text-red-500 p-1 md:p-1.5 hover:bg-black rounded-md md:rounded-lg"><Trash2 size={14} md:size={16} /></button>
                                     </div>
@@ -981,15 +912,6 @@ export default function App() {
           </div>
         )}
       </main>
-
-      <style>{`
-        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-        .cursor-zoom-in { cursor: zoom-in; }
-        .custom-scrollbar::-webkit-scrollbar { height: 4px; width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
-      `}</style>
     </div>
   );
 }
